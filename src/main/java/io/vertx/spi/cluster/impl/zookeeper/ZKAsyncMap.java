@@ -8,6 +8,7 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.zookeeper.data.Stat;
 
 import java.time.Instant;
+import java.util.Optional;
 
 /**
  * Created by Stream.Liu
@@ -56,30 +57,50 @@ class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   @Override
   public void put(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
+    put(k, v, Optional.<TimeoutStream>empty(), completionHandler);
+  }
+
+  @Override
+  public void put(K k, V v, long timeout, Handler<AsyncResult<Void>> completionHandler) {
+    TimeoutStream timeoutStream = vertx.timerStream(timeout);
+    timeoutStream.handler(aLong -> completionHandler.handle(Future.failedFuture("timeout on method put.")));
+    put(k, v, Optional.of(timeoutStream), completionHandler);
+  }
+
+  private void put(K k, V v, Optional<TimeoutStream> timeoutStream, Handler<AsyncResult<Void>> completionHandler) {
     if (!keyIsNull(k, completionHandler) && !valueIsNull(v, completionHandler)) {
       checkExists(k, existEvent -> {
         if (existEvent.succeeded()) {
           if (existEvent.result()) {
+            timeoutStream.ifPresent(TimeoutStream::cancel);
             setData(k, v, setDataEvent -> forwardAsyncResult(completionHandler, setDataEvent));
           } else {
+            timeoutStream.ifPresent(TimeoutStream::cancel);
             create(k, v, completionHandler);
           }
         } else {
-          vertx.runOnContext(event -> completionHandler.handle(Future.failedFuture(existEvent.cause())));
+          vertx.runOnContext(aVoid -> {
+            timeoutStream.ifPresent(TimeoutStream::cancel);
+            completionHandler.handle(Future.failedFuture(existEvent.cause()));
+          });
         }
       });
     }
   }
 
   @Override
-  public void put(K k, V v, long timeout, Handler<AsyncResult<Void>> completionHandler) {
-    //TODO add note to the doc.
-    //we don't need timeout since zookeeper only care session timeout which could be setting in zookeeper.properties
-    put(k, v, completionHandler);
+  public void putIfAbsent(K k, V v, Handler<AsyncResult<V>> completionHandler) {
+    putIfAbsent(k, v, Optional.<TimeoutStream>empty(), completionHandler);
   }
 
   @Override
-  public void putIfAbsent(K k, V v, Handler<AsyncResult<V>> completionHandler) {
+  public void putIfAbsent(K k, V v, long timeout, Handler<AsyncResult<V>> completionHandler) {
+    TimeoutStream timeoutStream = vertx.timerStream(timeout);
+    timeoutStream.handler(aLong -> completionHandler.handle(Future.failedFuture("timeout on method putIfAbsent.")));
+    putIfAbsent(k, v, Optional.of(timeoutStream), completionHandler);
+  }
+
+  private void putIfAbsent(K k, V v, Optional<TimeoutStream> timeoutStream, Handler<AsyncResult<V>> completionHandler) {
     if (!keyIsNull(k, completionHandler) && !valueIsNull(v, completionHandler)) {
       vertx.executeBlocking(future -> {
         long startTime = Instant.EPOCH.toEpochMilli();
@@ -91,22 +112,18 @@ class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
             String path = keyPath(k);
             V currentValue = getData(stat, path);
             if (compareAndSet(startTime, retries++, stat, path, currentValue, v)) {
+              timeoutStream.ifPresent(TimeoutStream::cancel);
               future.complete(currentValue);
               return;
             }
           } catch (Exception e) {
+            timeoutStream.ifPresent(TimeoutStream::cancel);
             future.fail(e);
             return;
           }
         }
       }, completionHandler);
     }
-  }
-
-  @Override
-  public void putIfAbsent(K k, V v, long timeout, Handler<AsyncResult<V>> completionHandler) {
-    //we use Exponential BackOff
-    putIfAbsent(k, v, completionHandler);
   }
 
   @Override
