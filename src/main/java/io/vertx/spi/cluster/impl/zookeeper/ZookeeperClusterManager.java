@@ -51,20 +51,17 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.properties";
   private static final String CONFIG_FILE = "zookeeper.properties";
-  private Properties conf;
+  private Properties conf = new Properties();
 
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_COUNTERS = "/counters/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
 
   public ZookeeperClusterManager() {
-    if (conf == null) {
-      InputStream is = getConfigStream();
-      try {
-        conf.load(is);
-      } catch (IOException e) {
-        log.error("Failed to load zookeeper config", e);
-      }
+    try {
+      conf.load(getConfigStream());
+    } catch (IOException e) {
+      log.error("Failed to load zookeeper config", e);
     }
   }
 
