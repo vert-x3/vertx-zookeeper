@@ -59,6 +59,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   public ZookeeperClusterManager() {
     if (conf == null) {
+      conf = new Properties();
       InputStream is = getConfigStream();
       try {
         conf.load(is);
