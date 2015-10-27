@@ -151,6 +151,11 @@ class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
             Stat stat = new Stat();
             String path = keyPath(k);
             V currentValue = getData(stat, path);
+            //do not replace value if previous value is null
+            if (currentValue == null) {
+              future.complete(null);
+              return;
+            }
             if (compareAndSet(startTime, retries++, stat, path, currentValue, v)) {
               future.complete(currentValue);
               return;
