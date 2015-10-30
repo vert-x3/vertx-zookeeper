@@ -251,11 +251,11 @@ abstract class ZKMap<K, V> {
     try {
       curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.DELETE) {
+          //clean parent node if doesn't have child node.
+          String[] paths = path.split("/");
+          String parentNodePath = Stream.of(paths).limit(paths.length - 1).reduce((previous, current) -> previous + "/" + current).get();
           curator.getChildren().inBackground((childClient, childEvent) -> {
-            //clean parent node if doesn't have child node.
             if (childEvent.getChildren().size() == 0) {
-              String[] paths = path.split("/");
-              String parentNodePath = Stream.of(paths).limit(paths.length - 1).reduce((previous, current) -> previous + "/" + current).get();
               curator.delete().inBackground((deleteClient, deleteEvent) -> {
                 if (deleteEvent.getType() == CuratorEventType.DELETE)
                   vertx.runOnContext(ea -> asyncResultHandler.handle(Future.succeededFuture(v)));
@@ -263,7 +263,7 @@ abstract class ZKMap<K, V> {
             } else {
               vertx.runOnContext(ea -> asyncResultHandler.handle(Future.succeededFuture(v)));
             }
-          }).forPath(path);
+          }).forPath(parentNodePath);
         }
       }).forPath(path);
     } catch (Exception ex) {
