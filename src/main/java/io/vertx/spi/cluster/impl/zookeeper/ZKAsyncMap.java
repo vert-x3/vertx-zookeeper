@@ -82,7 +82,7 @@ class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   public void putIfAbsent(K k, V v, Handler<AsyncResult<V>> completionHandler) {
     if (!keyIsNull(k, completionHandler) && !valueIsNull(v, completionHandler)) {
       vertx.executeBlocking(future -> {
-        long startTime = Instant.EPOCH.toEpochMilli();
+        long startTime = Instant.now().toEpochMilli();
         int retries = 0;
 
         for (; ; ) {
@@ -143,7 +143,7 @@ class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   public void replace(K k, V v, Handler<AsyncResult<V>> asyncResultHandler) {
     if (!keyIsNull(k, asyncResultHandler) && !valueIsNull(v, asyncResultHandler)) {
       vertx.executeBlocking(future -> {
-        long startTime = Instant.EPOCH.toEpochMilli();
+        long startTime = Instant.now().toEpochMilli();
         int retries = 0;
 
         for (; ; ) {
@@ -168,7 +168,7 @@ class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   public void replaceIfPresent(K k, V oldValue, V newValue, Handler<AsyncResult<Boolean>> resultHandler) {
     if (!keyIsNull(k, resultHandler) && !valueIsNull(oldValue, resultHandler) && !valueIsNull(newValue, resultHandler)) {
       vertx.executeBlocking(future -> {
-        long startTime = Instant.EPOCH.toEpochMilli();
+        long startTime = Instant.now().toEpochMilli();
         int retries = 0;
 
         for (; ; ) {
