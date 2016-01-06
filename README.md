@@ -37,6 +37,7 @@ you can also put all the jar (with out shaded) into `$VERTX_HOME/lib` by yoursel
 - change the value of `-Dvertx.cluster.managerClass=` to `io.vertx.spi.cluster.impl.zookeeper.ZookeeperClusterManager` in`$VERTX_HOME/bin/vertx`
 - make sure you have running zookeeper server.
 - put zookeeper.properties into $VERTX_HOME/conf, you can find default-zookeeper.properties as [example](https://github.com/stream1984/vertx-zookeeper/blob/master/src/main/resources/default-zookeeper.properties)
+- use the flag `-Dvertx.zookeeper.conf=` to set the `zookeeper.properties` file if it is not in the classpath. ie `-Dvertx.zookeeper.conf=/etc/app/zookeeper.properties`
 - then run your verticle with cmd `vertx -cluster`
 
 #### Add to your Vertx Application
@@ -60,7 +61,7 @@ Gradle:
 
 Be sure to set System Properties:
  - `-Dvertx.cluster.managerClass=io.vertx.spi.cluster.impl.zookeeper.ZookeeperClusterManager`
- - `-Dvertx.zookeeper.properties=/path/to/file/zookeeper.properties`
+ - `-Dvertx.zookeeper.conf=/path/to/file/zookeeper.properties`
 
 #### Create a Cluster Vertx programmatically 
 

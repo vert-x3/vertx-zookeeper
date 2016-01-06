@@ -55,13 +55,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final String CONFIG_FILE = "zookeeper.properties";
   private Properties conf = new Properties();
 
+  private static final String ZK_SYS_CONFIG_KEY = "vertx.zookeeper.conf";
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_COUNTERS = "/counters/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
 
   public ZookeeperClusterManager() {
     try {
-      String resourceLocation = System.getProperty("vertx.zookeeper.conf", CONFIG_FILE);
+      String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
       conf.load(getConfigStream(resourceLocation));
       log.info("Loaded Zookeeper.properties file from resourceLocation=" + resourceLocation);
     } catch (FileNotFoundException e) {
