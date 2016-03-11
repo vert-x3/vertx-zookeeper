@@ -1,7 +1,6 @@
 package io.vertx.spi.cluster.impl.zookeeper;
 
 import io.vertx.core.*;
-import io.vertx.core.net.impl.ServerID;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
 import io.vertx.core.spi.cluster.ChoosableIterable;
 import org.apache.curator.framework.CuratorFramework;
@@ -14,22 +13,19 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 /**
  * Created by Stream.Liu
  */
 class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
-
   private TreeCache treeCache;
   private ConcurrentMap<String, ChoosableSet<V>> cache = new ConcurrentHashMap<>();
-  private final static String VERTX_SUBS = "__vertx.subs";
 
   ZKAsyncMultiMap(Vertx vertx, CuratorFramework curator, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MULTI_MAP, mapName);
     treeCache = new TreeCache(curator, mapPath);
-    //we only make a listener for the path of __vertx.subs
-    if (mapName.equals(VERTX_SUBS)) treeCache.getListenable().addListener(new Listener());
+    treeCache.getListenable().addListener(new Listener());
+
     try {
       treeCache.start();
     } catch (Exception e) {
@@ -64,7 +60,7 @@ class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
       } else {
         vertx.runOnContext(event -> {
           Map<String, ChildData> maps = treeCache.getCurrentChildren(keyPath(k));
-          ChoosableSet<V> newEntries = new ChoosableSet<>(0);
+          ChoosableSet<V> newEntries = new ChoosableSet<>(maps != null ? maps.size(): 0);
           if (maps != null) {
             for (ChildData childData : maps.values()) {
               try {
@@ -134,38 +130,41 @@ class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
     });
   }
 
-
-  private Map.Entry<String, V> getServerID(ChildData childData) {
-    String[] paths = childData.getPath().split("/");
-    String[] hostAndPort = paths[paths.length - 1].split(":");
-    ServerID serverID = new ServerID(Integer.valueOf(hostAndPort[1]), hostAndPort[0]);
-    Map<String, V> result = new HashMap<>(1);
-    String keyPath = Stream.of(paths).limit(paths.length - 1).reduce((previous, current) -> previous + "/" + current).get();
-    result.put(keyPath, (V) serverID);
-    return result.entrySet().iterator().next();
-  }
-
   private class Listener implements TreeCacheListener {
+    private String cachePath(final String key) {
+      return mapPath + "/" + key;
+    }
+
     @Override
     public void childEvent(CuratorFramework client, TreeCacheEvent treeCacheEvent) throws Exception {
-      ChildData childData;
+      final ChildData childData = treeCacheEvent.getData();
+      // We only care about events with childData: NODE_ADDED, NODE_REMOVED
+      if (childData == null || mapPath.length() == childData.getPath().length()) {
+        return;
+      }
+      // Strip off the map prefix and leave the multi-map key path: `<parent>/<child>`
+      final String key[] = childData.getPath().substring(mapPath.length() + 1).split("/", 2);
+      final ChoosableSet<V> entries = cache.computeIfAbsent(cachePath(key[0]), k -> new ChoosableSet<>(1));
+
+      // When we only have 1 item in the key[], we're operating on the entire key (e.g. removing it)
+      // rather than a child element under the key
       switch (treeCacheEvent.getType()) {
         case NODE_ADDED:
-          childData = treeCacheEvent.getData();
-          if (childData != null && childData.getData() != null && childData.getData().length > 0) {
-            Map.Entry<String, V> entry = getServerID(childData);
-            ChoosableSet<V> entries = Optional.ofNullable(cache.get(entry.getKey())).orElse(new ChoosableSet<>(1));
-            entries.add(entry.getValue());
-            cache.put(entry.getKey(), entries);
+          if (key.length > 1) {
+            entries.add(asObject(childData.getData()));
           }
           break;
         case NODE_REMOVED:
-          childData = treeCacheEvent.getData();
-          if (childData != null && childData.getPath() != null) {
-            Map.Entry<String, V> entry = getServerID(childData);
-            ChoosableSet<V> entries = Optional.ofNullable(cache.get(entry.getKey())).orElse(new ChoosableSet<>(0));
-            entries.remove(entry.getValue());
-            cache.put(entry.getKey(), entries);
+          if (key.length == 1) {
+            cache.remove(cachePath(key[0]));
+          } else {
+            // When the child items are serialized into ZK, we use `toString()` to build the path
+            // element. When removing, search for the item that has the expected string representation.
+            for (final V entry: entries) {
+              if (entry.toString().equals(key[1])) {
+                entries.remove(entry);
+              }
+            }
           }
           break;
       }
