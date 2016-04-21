@@ -23,6 +23,8 @@ import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
@@ -51,20 +53,22 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.properties";
   private static final String CONFIG_FILE = "zookeeper.properties";
-  private Properties conf;
+  private static final String ZK_SYS_CONFIG_KEY = "vertx.zookeeper.conf";
+  private Properties conf = new Properties();
 
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_COUNTERS = "/counters/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
 
   public ZookeeperClusterManager() {
-    if (conf == null) {
-      InputStream is = getConfigStream();
-      try {
-        conf.load(is);
-      } catch (IOException e) {
-        log.error("Failed to load zookeeper config", e);
-      }
+    try {
+      String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
+      conf.load(getConfigStream(resourceLocation));
+      log.info("Loaded Zookeeper.properties file from resourceLocation=" + resourceLocation);
+    } catch (FileNotFoundException e) {
+      log.error("Could not find zookeeper config file", e);
+    } catch (IOException e) {
+      log.error("Failed to load zookeeper config", e);
     }
   }
 
@@ -78,14 +82,17 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     this.curator = curator;
   }
 
-  private InputStream getConfigStream() {
+  private InputStream getConfigStream(String resourceLocation) throws FileNotFoundException {
     ClassLoader ctxClsLoader = Thread.currentThread().getContextClassLoader();
     InputStream is = null;
     if (ctxClsLoader != null) {
-      is = ctxClsLoader.getResourceAsStream(CONFIG_FILE);
+      is = ctxClsLoader.getResourceAsStream(resourceLocation);
     }
-    if (is == null) {
-      is = getClass().getClassLoader().getResourceAsStream(CONFIG_FILE);
+    if (is == null && !resourceLocation.equals(CONFIG_FILE)) {
+      is = new FileInputStream(resourceLocation);
+    }
+    else if (is == null && resourceLocation.equals(CONFIG_FILE)) {
+      is = getClass().getClassLoader().getResourceAsStream(resourceLocation);
       if (is == null) {
         is = getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILE);
       }
