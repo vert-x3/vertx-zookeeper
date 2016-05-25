@@ -95,14 +95,14 @@ class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
       if (existEvent.succeeded()) {
         if (existEvent.result()) {
           Optional.ofNullable(treeCache.getCurrentData(fullPath))
-              .ifPresent(childData -> delete(fullPath, null, deleteEvent -> {
-                //delete cache
-                Optional.ofNullable(cache.get(keyPath)).ifPresent(vs -> {
-                  vs.remove(v);
-                  cache.put(keyPath, vs);
-                });
-                forwardAsyncResult(completionHandler, deleteEvent, true);
-              }));
+            .ifPresent(childData -> delete(fullPath, null, deleteEvent -> {
+              //delete cache
+              Optional.ofNullable(cache.get(keyPath)).ifPresent(vs -> {
+                vs.remove(v);
+                cache.put(keyPath, vs);
+              });
+              forwardAsyncResult(completionHandler, deleteEvent, true);
+            }));
         } else {
           vertx.runOnContext(event -> completionHandler.handle(Future.succeededFuture(false)));
         }
@@ -121,34 +121,34 @@ class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
         treeCache.getCurrentChildren(keyPath).keySet().forEach(valuePath -> {
           String fullPath = keyPath + "/" + valuePath;
           Optional.ofNullable(treeCache.getCurrentData(fullPath))
-              .filter(childData -> Optional.of(childData.getData()).isPresent())
-              .ifPresent(childData -> {
-                try {
-                  V value = asObject(childData.getData());
-                  if (v.hashCode() == value.hashCode()) {
-                    CompletableFuture future = new CompletableFuture();
-                    remove(keyPath, v, fullPath, removeEvent -> {
-                      if (removeEvent.succeeded()) future.complete(null);
-                      else future.completeExceptionally(removeEvent.cause());
-                    });
-                    futures.add(future);
-                  }
-                } catch (Exception e) {
-                  vertx.runOnContext(aVoid -> completionHandler.handle(Future.failedFuture(e)));
+            .filter(childData -> Optional.of(childData.getData()).isPresent())
+            .ifPresent(childData -> {
+              try {
+                V value = asObject(childData.getData());
+                if (v.hashCode() == value.hashCode()) {
+                  CompletableFuture future = new CompletableFuture();
+                  remove(keyPath, v, fullPath, removeEvent -> {
+                    if (removeEvent.succeeded()) future.complete(null);
+                    else future.completeExceptionally(removeEvent.cause());
+                  });
+                  futures.add(future);
                 }
-              });
+              } catch (Exception e) {
+                vertx.runOnContext(aVoid -> completionHandler.handle(Future.failedFuture(e)));
+              }
+            });
         });
       });
       //
       CompletableFuture
-          .allOf(futures.toArray(new CompletableFuture[futures.size()]))
-          .whenComplete((result, throwable) -> {
-            if (throwable != null) {
-              vertx.runOnContext(aVoid -> completionHandler.handle(Future.failedFuture(throwable)));
-            } else {
-              vertx.runOnContext(aVoid -> completionHandler.handle(Future.succeededFuture()));
-            }
-          });
+        .allOf(futures.toArray(new CompletableFuture[futures.size()]))
+        .whenComplete((result, throwable) -> {
+          if (throwable != null) {
+            vertx.runOnContext(aVoid -> completionHandler.handle(Future.failedFuture(throwable)));
+          } else {
+            vertx.runOnContext(aVoid -> completionHandler.handle(Future.succeededFuture()));
+          }
+        });
     });
   }
 

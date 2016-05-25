@@ -193,16 +193,16 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         active = true;
         if (curator == null) {
           retryPolicy = new ExponentialBackoffRetry(
-              Integer.valueOf(conf.getProperty("retry.initialSleepTime", "100")),
-              Integer.valueOf(conf.getProperty("retry.maxTimes", "5")),
-              Integer.valueOf(conf.getProperty("retry.intervalTimes", "10000")));
+            Integer.valueOf(conf.getProperty("retry.initialSleepTime", "100")),
+            Integer.valueOf(conf.getProperty("retry.maxTimes", "5")),
+            Integer.valueOf(conf.getProperty("retry.intervalTimes", "10000")));
 
           curator = CuratorFrameworkFactory.builder()
-              .connectString(conf.getProperty("hosts.zookeeper", "127.0.0.1"))
-              .namespace(conf.getProperty("path.root", "io.vertx"))
-              .sessionTimeoutMs(Integer.valueOf(conf.getProperty("timeout.session", "20000")))
-              .connectionTimeoutMs(Integer.valueOf(conf.getProperty("timeout.connect", "3000")))
-              .retryPolicy(retryPolicy).build();
+            .connectString(conf.getProperty("hosts.zookeeper", "127.0.0.1"))
+            .namespace(conf.getProperty("path.root", "io.vertx"))
+            .sessionTimeoutMs(Integer.valueOf(conf.getProperty("timeout.session", "20000")))
+            .connectionTimeoutMs(Integer.valueOf(conf.getProperty("timeout.connect", "3000")))
+            .retryPolicy(retryPolicy).build();
         }
         curator.start();
         nodeID = UUID.randomUUID().toString();
