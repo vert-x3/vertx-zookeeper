@@ -8,7 +8,6 @@ import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.retry.ExponentialBackoffRetry;
-import org.apache.curator.utils.EnsurePath;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
@@ -23,50 +22,48 @@ import java.util.stream.Stream;
  */
 abstract class ZKMap<K, V> {
 
-  protected final CuratorFramework curator;
+  final CuratorFramework curator;
   protected final Vertx vertx;
-  protected final String mapPath;
+  final String mapPath;
   protected final String mapName;
-  protected final EnsurePath ensurePath;
 
-  protected static final String ZK_PATH_ASYNC_MAP = "asyncMap";
-  protected static final String ZK_PATH_ASYNC_MULTI_MAP = "asyncMultiMap";
-  protected static final String EVENTBUS_PATH = "/" + ZK_PATH_ASYNC_MULTI_MAP + "/subs/";
-  protected static final String ZK_PATH_SYNC_MAP = "syncMap";
+  static final String ZK_PATH_ASYNC_MAP = "asyncMap";
+  static final String ZK_PATH_ASYNC_MULTI_MAP = "asyncMultiMap";
+  private static final String EVENTBUS_PATH = "/" + ZK_PATH_ASYNC_MULTI_MAP + "/__vertx.subs/";
+  static final String ZK_PATH_SYNC_MAP = "syncMap";
 
   private RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
 
-  protected ZKMap(CuratorFramework curator, Vertx vertx, String mapType, String mapName) {
+  ZKMap(CuratorFramework curator, Vertx vertx, String mapType, String mapName) {
     this.curator = curator;
     this.vertx = vertx;
     this.mapName = mapName;
     this.mapPath = "/" + mapType + "/" + mapName;
-    ensurePath = curator.newNamespaceAwareEnsurePath(mapPath);
   }
 
-  protected String keyPath(K k) {
+  String keyPath(K k) {
     Objects.requireNonNull(k, "key should not be null.");
     return mapPath + "/" + k.toString();
   }
 
-  protected String valuePath(K k, Object v) {
+  String valuePath(K k, Object v) {
     Objects.requireNonNull(v, "value should not be null.");
     return keyPath(k) + "/" + v.toString();
   }
 
-  protected <T> boolean keyIsNull(Object key, Handler<AsyncResult<T>> handler) {
+  <T> boolean keyIsNull(Object key, Handler<AsyncResult<T>> handler) {
     boolean result = key == null;
     if (result) handler.handle(Future.failedFuture("key can not be null."));
     return result;
   }
 
-  protected <T> boolean valueIsNull(Object value, Handler<AsyncResult<T>> handler) {
+  <T> boolean valueIsNull(Object value, Handler<AsyncResult<T>> handler) {
     boolean result = value == null;
     if (result) handler.handle(Future.failedFuture("value can not be null."));
     return result;
   }
 
-  protected byte[] asByte(Object object) throws IOException {
+  byte[] asByte(Object object) throws IOException {
     ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
     DataOutput dataOutput = new DataOutputStream(byteOut);
     if (object instanceof ClusterSerializable) {
@@ -88,7 +85,7 @@ abstract class ZKMap<K, V> {
     return byteOut.toByteArray();
   }
 
-  protected <T> T asObject(byte[] bytes) throws Exception {
+  <T> T asObject(byte[] bytes) throws Exception {
     ByteArrayInputStream byteIn = new ByteArrayInputStream(bytes);
     DataInputStream in = new DataInputStream(byteIn);
     boolean isClusterSerializable = in.readBoolean();
@@ -113,7 +110,7 @@ abstract class ZKMap<K, V> {
     }
   }
 
-  protected <T, E> void forwardAsyncResult(Handler<AsyncResult<T>> completeHandler, AsyncResult<E> asyncResult) {
+  <T, E> void forwardAsyncResult(Handler<AsyncResult<T>> completeHandler, AsyncResult<E> asyncResult) {
     if (asyncResult.succeeded()) {
       E result = asyncResult.result();
       if (result == null || result instanceof Void) {
@@ -126,7 +123,7 @@ abstract class ZKMap<K, V> {
     }
   }
 
-  protected <T, E> void forwardAsyncResult(Handler<AsyncResult<T>> completeHandler, AsyncResult<E> asyncResult, T result) {
+  <T, E> void forwardAsyncResult(Handler<AsyncResult<T>> completeHandler, AsyncResult<E> asyncResult, T result) {
     if (asyncResult.succeeded()) {
       vertx.runOnContext(event -> completeHandler.handle(Future.succeededFuture(result)));
     } else {
@@ -143,17 +140,12 @@ abstract class ZKMap<K, V> {
    * @return T
    * @throws Exception
    */
-  protected <T> T getData(Stat stat, String path) throws Exception {
+  <T> T getData(Stat stat, String path) throws Exception {
     T result = null;
-    try {
-      ensurePath.ensure(curator.getZookeeperClient());
+    if (null != curator.checkExists().forPath(path)) {
       result = asObject(curator.getData().storingStatIn(stat).forPath(path));
-    } catch (KeeperException.NoNodeException e) {
-      try {
-        curator.create().creatingParentsIfNeeded().forPath(path, asByte(null));
-      } catch (KeeperException.NodeExistsException ex) {
-        // Do nothing useful.
-      }
+    } else {
+      curator.create().creatingParentsIfNeeded().forPath(path, asByte(null));
     }
     return result;
   }
@@ -169,7 +161,7 @@ abstract class ZKMap<K, V> {
    * @return boolean
    * @throws Exception
    */
-  protected boolean compareAndSet(long startTime, int retries, Stat stat, String path, V expect, V update) throws Exception {
+  boolean compareAndSet(long startTime, int retries, Stat stat, String path, V expect, V update) throws Exception {
     V currentValue = getData(stat, path);
     if (currentValue == expect || currentValue.equals(expect)) {
       try {
@@ -187,11 +179,11 @@ abstract class ZKMap<K, V> {
     }
   }
 
-  protected void checkExists(K k, AsyncResultHandler<Boolean> handler) {
+  void checkExists(K k, AsyncResultHandler<Boolean> handler) {
     checkExists(keyPath(k), handler);
   }
 
-  protected void checkExists(String path, AsyncResultHandler<Boolean> handler) {
+  void checkExists(String path, AsyncResultHandler<Boolean> handler) {
     try {
       //sync data before checking
       curator.sync().inBackground((client, event) -> {
@@ -216,11 +208,11 @@ abstract class ZKMap<K, V> {
     }
   }
 
-  protected void create(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
+  void create(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
     create(keyPath(k), v, completionHandler);
   }
 
-  protected void create(String path, V v, Handler<AsyncResult<Void>> completionHandler) {
+  void create(String path, V v, Handler<AsyncResult<Void>> completionHandler) {
     try {
       //there are two type of node - ephemeral and persistent.
       //if path is 'asyncMultiMap/subs/' which save the data of eventbus address and serverID we could using ephemeral,
@@ -236,11 +228,11 @@ abstract class ZKMap<K, V> {
     }
   }
 
-  protected void setData(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
+  void setData(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
     setData(keyPath(k), v, completionHandler);
   }
 
-  protected void setData(String path, V v, Handler<AsyncResult<Void>> completionHandler) {
+  void setData(String path, V v, Handler<AsyncResult<Void>> completionHandler) {
     try {
       curator.setData().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.SET_DATA) {
@@ -252,11 +244,11 @@ abstract class ZKMap<K, V> {
     }
   }
 
-  protected void delete(K k, V v, Handler<AsyncResult<V>> asyncResultHandler) {
+  void delete(K k, V v, Handler<AsyncResult<V>> asyncResultHandler) {
     delete(keyPath(k), v, asyncResultHandler);
   }
 
-  protected void delete(String path, V v, Handler<AsyncResult<V>> asyncResultHandler) {
+  void delete(String path, V v, Handler<AsyncResult<V>> asyncResultHandler) {
     try {
       curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.DELETE) {

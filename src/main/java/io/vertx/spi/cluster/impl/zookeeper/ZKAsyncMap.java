@@ -225,8 +225,8 @@ class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   public void size(Handler<AsyncResult<Integer>> resultHandler) {
     try {
       curator.getChildren().inBackground((client, event) ->
-          vertx.runOnContext(aVoid -> resultHandler.handle(Future.succeededFuture(event.getChildren().size()))))
-          .forPath(mapPath);
+        vertx.runOnContext(aVoid -> resultHandler.handle(Future.succeededFuture(event.getChildren().size()))))
+        .forPath(mapPath);
     } catch (Exception e) {
       vertx.runOnContext(aVoid -> resultHandler.handle(Future.failedFuture(e)));
     }
