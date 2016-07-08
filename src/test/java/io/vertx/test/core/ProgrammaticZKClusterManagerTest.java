@@ -3,8 +3,8 @@ package io.vertx.test.core;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.spi.cluster.ClusterManager;
-import io.vertx.spi.cluster.impl.zookeeper.MockZKCluster;
-import io.vertx.spi.cluster.impl.zookeeper.ZookeeperClusterManager;
+import io.vertx.spi.cluster.zookeeper.MockZKCluster;
+import io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager;
 import org.junit.Test;
 
 import java.util.Properties;

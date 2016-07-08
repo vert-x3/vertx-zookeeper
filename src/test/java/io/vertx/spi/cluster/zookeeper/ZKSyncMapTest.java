@@ -1,5 +1,6 @@
-package io.vertx.spi.cluster.impl.zookeeper;
+package io.vertx.spi.cluster.zookeeper;
 
+import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;

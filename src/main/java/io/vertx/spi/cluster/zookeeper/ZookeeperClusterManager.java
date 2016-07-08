@@ -1,4 +1,4 @@
-package io.vertx.spi.cluster.impl.zookeeper;
+package io.vertx.spi.cluster.zookeeper;
 
 import io.vertx.core.*;
 import io.vertx.core.impl.ExtendedClusterManager;
@@ -9,6 +9,9 @@ import io.vertx.core.shareddata.Counter;
 import io.vertx.core.shareddata.Lock;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
 import io.vertx.core.spi.cluster.NodeListener;
+import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMap;
+import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMultiMap;
+import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;

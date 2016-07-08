@@ -1,4 +1,4 @@
-package io.vertx.spi.cluster.impl.zookeeper;
+package io.vertx.spi.cluster.zookeeper.impl;
 
 import com.google.common.collect.Maps;
 import io.vertx.core.VertxException;
@@ -14,9 +14,9 @@ import java.util.stream.Collectors;
 /**
  * Created by Stream.Liu
  */
-class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
+public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
 
-  ZKSyncMap(CuratorFramework curator, String mapName) {
+  public ZKSyncMap(CuratorFramework curator, String mapName) {
     super(curator, null, ZK_PATH_SYNC_MAP, mapName);
   }
 
