@@ -1,18 +1,19 @@
 package io.vertx.spi.cluster.impl.zookeeper;
 
 import io.vertx.core.*;
+import io.vertx.core.impl.ExtendedClusterManager;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.Counter;
 import io.vertx.core.shareddata.Lock;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
-import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.core.spi.cluster.NodeListener;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.api.CuratorEventType;
+import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.framework.recipes.atomic.DistributedAtomicLong;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
@@ -37,7 +38,7 @@ import java.util.stream.Collectors;
  *
  * @author Stream.Liu
  */
-public class ZookeeperClusterManager implements ClusterManager, PathChildrenCacheListener, ConnectionStateListener {
+public class ZookeeperClusterManager implements ExtendedClusterManager, PathChildrenCacheListener, ConnectionStateListener {
 
   private static final Logger log = LoggerFactory.getLogger(ZookeeperClusterManager.class);
   private Vertx vertx;
@@ -53,7 +54,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.properties";
   private static final String CONFIG_FILE = "zookeeper.properties";
-  private static final String ZK_SYS_CONFIG_KEY = "vertx.zookeeper.conf";
+  private static final String ZK_SYS_CONFIG_KEY = "vertx.zookeeper.config";
   private Properties conf = new Properties();
 
   private static final String ZK_PATH_LOCKS = "/locks/";
@@ -295,6 +296,18 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     }
   }
 
+  @Override
+  public void beforeLeave() {
+    vertx.executeBlocking(fut -> {
+      if (isActive()) {
+        if (curator != null && curator.getState() == CuratorFrameworkState.STARTED) {
+          //We release locks directly
+          locks.values().stream().forEach(ZKLock::release);
+          locks.clear();
+        }
+      }
+    }, null);
+  }
 
   /**
    * Counter implement
