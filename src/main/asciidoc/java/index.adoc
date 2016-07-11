@@ -8,25 +8,25 @@ This implementation is packaged inside:
 [source,xml,subs="+attributes"]
 ----
 <dependency>
-  <groupId>io.vertx</groupId>
-  <artifactId>vertx-zookeeper</artifactId>
-  <version>3.3.1</version>
+<groupId>io.vertx</groupId>
+<artifactId>vertx-zookeeper</artifactId>
+<version>3.3.1</version>
 </dependency>
 ----
 
 In Vert.x a cluster manager is used for various functions including:
 
-* Discovery and group membership of Vert.x nodes in a cluster
-* Maintaining cluster wide topic subscriber lists (so we know which nodes are interested in which event bus addresses)
-* Distributed Map support
-* Distributed Locks
-* Distributed Counters
+Discovery and group membership of Vert.x nodes in a cluster
+Maintaining cluster wide topic subscriber lists (so we know which nodes are interested in which event bus addresses)
+Distributed Map support
+Distributed Locks
+Distributed Counters
 
 Cluster managers *do not* handle the event bus inter-node transport, this is done directly by Vert.x with TCP connections.
 
 == How to work
 We are using [Apache Curator](http://curator.apache.org/) framework rather than zookeeper client directly, so
- we have a dependency for libraries used in Curator such as `guava`, `slf4j` and of course `zookeeper`.
+we have a dependency for libraries used in Curator such as `guava`, `slf4j` and of course `zookeeper`.
 
 Since ZK using tree dictionary to store data, we can take root path as namespace default root path is `io.vertx` which in default-zookeeper.properties.
 and there are another 5 sub path to record other information for functions in vert.x cluster manager, all you can change the path is `root path`.
@@ -59,11 +59,11 @@ ClusterManager mgr = new ZookeeperClusterManager();
 VertxOptions options = new VertxOptions().setClusterManager(mgr);
 
 Vertx.clusteredVertx(options, res -> {
-  if (res.succeeded()) {
-    Vertx vertx = res.result();
-  } else {
-    // failed!
-  }
+if (res.succeeded()) {
+Vertx vertx = res.result();
+} else {
+// failed!
+}
 });
 ----
 
@@ -120,11 +120,11 @@ ClusterManager mgr = new ZookeeperClusterManager(zkConfig);
 VertxOptions options = new VertxOptions().setClusterManager(mgr);
 
 Vertx.clusteredVertx(options, res -> {
-  if (res.succeeded()) {
-    Vertx vertx = res.result();
-  } else {
-    // failed!
-  }
+if (res.succeeded()) {
+Vertx vertx = res.result();
+} else {
+// failed!
+}
 });
 ----
 
@@ -148,4 +148,3 @@ java.util.logging.FileHandler.level=INFO
 
 == About Zookeeper version
 We use Curator 2.x.x, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x
-
