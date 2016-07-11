@@ -9,6 +9,8 @@ import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
 import org.apache.curator.test.Timing;
 
+import java.util.Properties;
+
 /**
  * Created by Stream.Liu
  */
@@ -27,13 +29,22 @@ public class MockZKCluster {
     }
   }
 
+  public Properties getDefaultConfig() {
+    Properties config = new Properties();
+    config.setProperty("hosts.zookeeper", server.getConnectString());
+    config.setProperty("path.root", "io.vertx");
+    config.setProperty("retry.initialSleepTime", "3000");
+    config.setProperty("retry.intervalTimes", "3");
+    return config;
+  }
+
   public ClusterManager getClusterManager() {
     CuratorFramework curator = CuratorFrameworkFactory.builder()
-        .namespace("io.vertx")
-        .sessionTimeoutMs(6000)
-        .connectionTimeoutMs(timing.connection())
-        .connectString(server.getConnectString())
-        .retryPolicy(retryPolicy).build();
+      .namespace("io.vertx")
+      .sessionTimeoutMs(6000)
+      .connectionTimeoutMs(timing.connection())
+      .connectString(server.getConnectString())
+      .retryPolicy(retryPolicy).build();
     return new ZookeeperClusterManager(retryPolicy, curator);
   }
 }

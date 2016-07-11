@@ -52,6 +52,7 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
 
   private String nodeID;
   private CuratorFramework curator;
+  private boolean customCuratorCluster;
   private RetryPolicy retryPolicy;
   private Map<String, ZKLock> locks = new ConcurrentHashMap<>();
 
@@ -63,6 +64,7 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_COUNTERS = "/counters/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
+  private static final String ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH = "/cluster/nodes";
 
   public ZookeeperClusterManager() {
     try {
@@ -74,6 +76,18 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
     } catch (IOException e) {
       log.error("Failed to load zookeeper config", e);
     }
+  }
+
+  public ZookeeperClusterManager(CuratorFramework curator) {
+    this(curator, UUID.randomUUID().toString());
+  }
+
+  public ZookeeperClusterManager(CuratorFramework curator, String nodeID) {
+    Objects.requireNonNull(curator, "The Curator instance cannot be null.");
+    Objects.requireNonNull(curator, "The nodeID cannot be null.");
+    this.curator = curator;
+    this.nodeID = nodeID;
+    this.customCuratorCluster = true;
   }
 
   public ZookeeperClusterManager(Properties config) {
@@ -94,8 +108,7 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
     }
     if (is == null && !resourceLocation.equals(CONFIG_FILE)) {
       is = new FileInputStream(resourceLocation);
-    }
-    else if (is == null && resourceLocation.equals(CONFIG_FILE)) {
+    } else if (is == null && resourceLocation.equals(CONFIG_FILE)) {
       is = getClass().getClassLoader().getResourceAsStream(resourceLocation);
       if (is == null) {
         is = getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILE);
@@ -110,6 +123,10 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
 
   public Properties getConfig() {
     return conf;
+  }
+
+  public CuratorFramework getCuratorFramework() {
+    return this.curator;
   }
 
   @Override
@@ -190,11 +207,36 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
     this.nodeListener = listener;
   }
 
+  private void addLocalNodeID() throws VertxException {
+    clusterNodes = new PathChildrenCache(curator, ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH, true);
+    clusterNodes.getListenable().addListener(this);
+    try {
+      clusterNodes.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
+      //Join to the cluster
+      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
+    } catch (Exception e) {
+      throw new VertxException(e);
+    }
+  }
+
+
   @Override
   public synchronized void join(Handler<AsyncResult<Void>> resultHandler) {
     vertx.executeBlocking(future -> {
       if (!active) {
         active = true;
+
+        //The curator instance has been passed using the constructor.
+        if (customCuratorCluster) {
+          try {
+            addLocalNodeID();
+          } catch (VertxException e) {
+            future.fail(e);
+          }
+          future.complete();
+          return;
+        }
+
         if (curator == null) {
           retryPolicy = new ExponentialBackoffRetry(
             Integer.valueOf(conf.getProperty("retry.initialSleepTime", "100")),
@@ -210,14 +252,10 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
         }
         curator.start();
         nodeID = UUID.randomUUID().toString();
-        clusterNodes = new PathChildrenCache(curator, ZK_PATH_CLUSTER_NODE.substring(0, ZK_PATH_CLUSTER_NODE.length() - 1), true);
-        clusterNodes.getListenable().addListener(this);
         try {
-          clusterNodes.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
-          //Join to the cluster
-          curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
+          addLocalNodeID();
         } catch (Exception e) {
-          future.fail(new VertxException(e));
+          future.fail(e);
         }
         future.complete();
       }
@@ -225,18 +263,23 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
   }
 
   @Override
-  public synchronized void leave(Handler<AsyncResult<Void>> resultHandler) {
+  public void leave(Handler<AsyncResult<Void>> resultHandler) {
     vertx.executeBlocking(future -> {
-      if (active) {
-        active = false;
-        try {
-          curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
-            if (event.getType() == CuratorEventType.DELETE) {
-              clusterNodes.getListenable().removeListener(ZookeeperClusterManager.this);
-            }
-          }).forPath(ZK_PATH_CLUSTER_NODE + nodeID);
-        } catch (Exception e) {
-          log.error(e);
+      synchronized (ZookeeperClusterManager.this) {
+        if (active) {
+          active = false;
+          try {
+            curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
+              if (event.getType() == CuratorEventType.DELETE) {
+                clusterNodes.getListenable().removeListener(ZookeeperClusterManager.this);
+                if (!customCuratorCluster && curator.getState() == CuratorFrameworkState.STARTED) {
+                  curator.close();
+                }
+              }
+            }).forPath(ZK_PATH_CLUSTER_NODE + nodeID);
+          } catch (Exception e) {
+            log.error(e);
+          }
         }
       }
       future.complete();
@@ -303,7 +346,7 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
   public void beforeLeave() {
     vertx.executeBlocking(fut -> {
       if (isActive()) {
-        if (curator != null && curator.getState() == CuratorFrameworkState.STARTED) {
+        if (!customCuratorCluster && curator.getState() == CuratorFrameworkState.STARTED) {
           //We release locks directly
           locks.values().stream().forEach(ZKLock::release);
           locks.clear();

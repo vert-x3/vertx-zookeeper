@@ -24,7 +24,13 @@ public class ZKSyncMapTest {
     TestingServer server = new TestingServer();
 
     RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 3);
-    CuratorFramework curator = CuratorFrameworkFactory.builder().namespace("io.vertx").sessionTimeoutMs(timing.session()).connectionTimeoutMs(timing.connection()).connectString(server.getConnectString()).retryPolicy(retryPolicy).build();
+    CuratorFramework curator = CuratorFrameworkFactory.builder()
+      .namespace("io.vertx")
+      .sessionTimeoutMs(timing.session())
+      .connectionTimeoutMs(timing.connection())
+      .connectString(server.getConnectString())
+      .retryPolicy(retryPolicy)
+      .build();
     curator.start();
 
     String k = "myKey";
