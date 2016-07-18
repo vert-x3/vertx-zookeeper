@@ -1,13 +1,13 @@
 package io.vertx.spi.cluster.zookeeper;
 
 import io.vertx.core.*;
-import io.vertx.core.impl.ExtendedClusterManager;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.Counter;
 import io.vertx.core.shareddata.Lock;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
+import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.core.spi.cluster.NodeListener;
 import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMap;
 import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMultiMap;
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
  *
  * @author Stream.Liu
  */
-public class ZookeeperClusterManager implements ExtendedClusterManager, PathChildrenCacheListener, ConnectionStateListener {
+public class ZookeeperClusterManager implements ClusterManager, PathChildrenCacheListener, ConnectionStateListener {
 
   private static final Logger log = LoggerFactory.getLogger(ZookeeperClusterManager.class);
   private Vertx vertx;
@@ -340,19 +340,6 @@ public class ZookeeperClusterManager implements ExtendedClusterManager, PathChil
       case RECONNECTED:
         break;
     }
-  }
-
-  @Override
-  public void beforeLeave() {
-    vertx.executeBlocking(fut -> {
-      if (isActive()) {
-        if (!customCuratorCluster && curator.getState() == CuratorFrameworkState.STARTED) {
-          //We release locks directly
-          locks.values().stream().forEach(ZKLock::release);
-          locks.clear();
-        }
-      }
-    }, null);
   }
 
   /**
