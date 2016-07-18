@@ -1,4 +1,4 @@
-package io.vertx.spi.cluster.impl.zookeeper;
+package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.*;
 import io.vertx.core.net.impl.ServerID;
@@ -19,12 +19,12 @@ import java.util.stream.Stream;
 /**
  * Created by Stream.Liu
  */
-class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
+public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
 
   private TreeCache treeCache;
   private ConcurrentMap<String, ChoosableSet<V>> cache = new ConcurrentHashMap<>();
 
-  ZKAsyncMultiMap(Vertx vertx, CuratorFramework curator, String mapName) {
+  public ZKAsyncMultiMap(Vertx vertx, CuratorFramework curator, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MULTI_MAP, mapName);
     treeCache = new TreeCache(curator, mapPath);
     treeCache.getListenable().addListener(new Listener());

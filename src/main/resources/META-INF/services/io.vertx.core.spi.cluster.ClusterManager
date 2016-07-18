@@ -1,1 +1,1 @@
-io.vertx.spi.cluster.impl.zookeeper.ZookeeperClusterManager
+io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager

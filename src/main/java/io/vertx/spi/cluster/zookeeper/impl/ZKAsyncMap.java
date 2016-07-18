@@ -1,4 +1,4 @@
-package io.vertx.spi.cluster.impl.zookeeper;
+package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.*;
 import io.vertx.core.shareddata.AsyncMap;
@@ -13,11 +13,11 @@ import java.util.Optional;
 /**
  * Created by Stream.Liu
  */
-class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
+public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   private final PathChildrenCache curatorCache;
 
-  ZKAsyncMap(Vertx vertx, CuratorFramework curator, String mapName) {
+  public ZKAsyncMap(Vertx vertx, CuratorFramework curator, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MAP, mapName);
     curatorCache = new PathChildrenCache(curator, mapPath, true);
     try {
