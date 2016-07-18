@@ -1,4 +1,4 @@
-package io.vertx.spi.cluster.impl.zookeeper;
+package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;

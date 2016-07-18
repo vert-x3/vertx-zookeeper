@@ -1,5 +1,6 @@
-package io.vertx.spi.cluster.impl.zookeeper;
+package io.vertx.spi.cluster.zookeeper;
 
+import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -23,7 +24,13 @@ public class ZKSyncMapTest {
     TestingServer server = new TestingServer();
 
     RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 3);
-    CuratorFramework curator = CuratorFrameworkFactory.builder().namespace("io.vertx").sessionTimeoutMs(timing.session()).connectionTimeoutMs(timing.connection()).connectString(server.getConnectString()).retryPolicy(retryPolicy).build();
+    CuratorFramework curator = CuratorFrameworkFactory.builder()
+      .namespace("io.vertx")
+      .sessionTimeoutMs(timing.session())
+      .connectionTimeoutMs(timing.connection())
+      .connectString(server.getConnectString())
+      .retryPolicy(retryPolicy)
+      .build();
     curator.start();
 
     String k = "myKey";
