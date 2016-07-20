@@ -67,19 +67,16 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final String ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH = "/cluster/nodes";
 
   public ZookeeperClusterManager() {
-    try {
-      String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
-      conf.load(getConfigStream(resourceLocation));
-      log.info("Loaded Zookeeper.properties file from resourceLocation=" + resourceLocation);
-    } catch (FileNotFoundException e) {
-      log.error("Could not find zookeeper config file", e);
-    } catch (IOException e) {
-      log.error("Failed to load zookeeper config", e);
-    }
+    String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
+    loadProperties(resourceLocation);
   }
 
   public ZookeeperClusterManager(CuratorFramework curator) {
     this(curator, UUID.randomUUID().toString());
+  }
+
+  public ZookeeperClusterManager(String resourceLocation) {
+    loadProperties(resourceLocation);
   }
 
   public ZookeeperClusterManager(CuratorFramework curator, String nodeID) {
@@ -98,6 +95,17 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   ZookeeperClusterManager(RetryPolicy retryPolicy, CuratorFramework curator) {
     this.retryPolicy = retryPolicy;
     this.curator = curator;
+  }
+
+  private void loadProperties(String resourceLocation) {
+    try {
+      conf.load(getConfigStream(resourceLocation));
+      log.info("Loaded Zookeeper.properties file from resourceLocation=" + resourceLocation);
+    } catch (FileNotFoundException e) {
+      log.error("Could not find zookeeper config file", e);
+    } catch (IOException e) {
+      log.error("Failed to load zookeeper config", e);
+    }
   }
 
   private InputStream getConfigStream(String resourceLocation) throws FileNotFoundException {
