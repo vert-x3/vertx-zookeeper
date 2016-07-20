@@ -6,8 +6,8 @@
 
   <parent>
     <groupId>io.vertx</groupId>
-    <artifactId>vertx-parent</artifactId>
-    <version>5</version>
+    <artifactId>vertx-ext-parent</artifactId>
+    <version>20</version>
   </parent>
 
   <artifactId>vertx-zookeeper</artifactId>
@@ -15,7 +15,7 @@
   <name>Vert.x Zookeeper Cluster Manager</name>
 
   <properties>
-    <stack.version>3.4.0-SNAPSHOT</stack.version>
+    <stack.version>3.3.2</stack.version>
     <curator.version>2.10.0</curator.version>
     <junit.version>4.11</junit.version>
     <log4j.version>1.2.16</log4j.version>
@@ -34,6 +34,12 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+
+  <scm>
+    <connection>scm:git:git@github.com:vert-x3/vertx-zookeeper.git</connection>
+    <developerConnection>scm:git:git@github.com:vert-x3/vertx-zookeeper.git</developerConnection>
+    <url>git@github.com:vert-x3/vertx-zookeeper.git</url>
+  </scm>
 
   <dependencies>
     <dependency>
