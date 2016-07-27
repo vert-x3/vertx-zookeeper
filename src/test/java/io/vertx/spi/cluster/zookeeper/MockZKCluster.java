@@ -7,23 +7,23 @@ import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
-import org.apache.curator.test.Timing;
 
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Created by Stream.Liu
  */
 public class MockZKCluster {
 
-  private RetryPolicy retryPolicy = new ExponentialBackoffRetry(2000, 5, 10000);
-  private Timing timing;
+  private RetryPolicy retryPolicy = new ExponentialBackoffRetry(2000, 1, 8000);
   private TestingServer server;
+  private Set<ZookeeperClusterManager> clusterManagers = new HashSet<>();
 
   public MockZKCluster() {
     try {
       server = new TestingServer(new InstanceSpec(null, -1, -1, -1, true, -1, -1, 120), true);
-      timing = new Timing();
     } catch (Exception e) {
       e.printStackTrace();
     }
@@ -38,13 +38,25 @@ public class MockZKCluster {
     return config;
   }
 
+  public void stop() {
+    try {
+      clusterManagers.forEach(clusterManager -> clusterManager.getCuratorFramework().close());
+      clusterManagers.clear();
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
   public ClusterManager getClusterManager() {
     CuratorFramework curator = CuratorFrameworkFactory.builder()
       .namespace("io.vertx")
-      .sessionTimeoutMs(6000)
-      .connectionTimeoutMs(timing.connection())
+      .sessionTimeoutMs(10000)
+      .connectionTimeoutMs(5000)
       .connectString(server.getConnectString())
       .retryPolicy(retryPolicy).build();
-    return new ZookeeperClusterManager(retryPolicy, curator);
+    curator.start();
+    ZookeeperClusterManager zookeeperClusterManager = new ZookeeperClusterManager(retryPolicy, curator);
+    clusterManagers.add(zookeeperClusterManager);
+    return zookeeperClusterManager;
   }
 }

@@ -185,21 +185,12 @@ abstract class ZKMap<K, V> {
 
   void checkExists(String path, AsyncResultHandler<Boolean> handler) {
     try {
-      //sync data before checking
-      curator.sync().inBackground((client, event) -> {
-        if (event.getType() == CuratorEventType.SYNC) {
-          try {
-            curator.checkExists().inBackground((clientCheck, eventCheck) -> {
-              if (eventCheck.getType() == CuratorEventType.EXISTS) {
-                if (eventCheck.getStat() == null) {
-                  vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(false)));
-                } else {
-                  vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(true)));
-                }
-              }
-            }).forPath(path);
-          } catch (Exception ex) {
-            vertx.runOnContext(aVoid -> handler.handle(Future.failedFuture(ex)));
+      curator.checkExists().inBackground((clientCheck, eventCheck) -> {
+        if (eventCheck.getType() == CuratorEventType.EXISTS) {
+          if (eventCheck.getStat() == null) {
+            vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(false)));
+          } else {
+            vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(true)));
           }
         }
       }).forPath(path);
