@@ -10,6 +10,11 @@ public class ZKClusteredHATest extends HATest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 
+  public void after() throws Exception {
+    super.after();
+    zkClustered.stop();
+  }
+
   @Override
   protected ClusterManager getClusterManager() {
     return zkClustered.getClusterManager();

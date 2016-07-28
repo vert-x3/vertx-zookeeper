@@ -81,7 +81,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   public ZookeeperClusterManager(CuratorFramework curator, String nodeID) {
     Objects.requireNonNull(curator, "The Curator instance cannot be null.");
-    Objects.requireNonNull(curator, "The nodeID cannot be null.");
+    Objects.requireNonNull(nodeID, "The nodeID cannot be null.");
     this.curator = curator;
     this.nodeID = nodeID;
     this.customCuratorCluster = true;
@@ -93,8 +93,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   //just for unit testing
   ZookeeperClusterManager(RetryPolicy retryPolicy, CuratorFramework curator) {
+    Objects.requireNonNull(retryPolicy, "The retry policy cannot be null.");
+    Objects.requireNonNull(curator, "The Curator instance cannot be null.");
     this.retryPolicy = retryPolicy;
     this.curator = curator;
+    this.nodeID = UUID.randomUUID().toString();
+    this.customCuratorCluster = true;
   }
 
   private void loadProperties(String resourceLocation) {
