@@ -3,10 +3,7 @@ package io.vertx.test.core;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.VertxOptions;
-import io.vertx.core.eventbus.DeliveryOptions;
-import io.vertx.core.eventbus.EventBus;
-import io.vertx.core.eventbus.Message;
-import io.vertx.core.eventbus.MessageConsumer;
+import io.vertx.core.eventbus.*;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 
@@ -193,6 +190,21 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
       assertTrue(ar.succeeded());
       vertx.setTimer(DELAY_TIME, event -> vertices[1].eventBus().send("foobar", "whatever"));
     });
+    await();
+  }
+
+  public void testDefaultCodecReplyExceptionSubclass() throws Exception {
+    startNodes(2);
+    MyReplyException myReplyException = new MyReplyException(23, "my exception");
+    MyReplyExceptionMessageCodec codec = new MyReplyExceptionMessageCodec();
+    vertices[0].eventBus().registerDefaultCodec(MyReplyException.class, codec);
+    vertices[1].eventBus().registerDefaultCodec(MyReplyException.class, codec);
+    MessageConsumer<ReplyException> reg = vertices[0].eventBus().<ReplyException>consumer(ADDRESS1, msg -> {
+      assertTrue(msg.body() instanceof MyReplyException);
+      testComplete();
+    });
+    reg.completionHandler(ar -> vertx.setTimer(DELAY_TIME, event -> vertices[1].eventBus().send(ADDRESS1, myReplyException)));
+
     await();
   }
 
