@@ -169,7 +169,7 @@ abstract class ZKMap<K, V> {
       } catch (KeeperException.BadVersionException | KeeperException.NoNodeException e) {
         // If the version has changed, block on the retry policy if necessary. If no more retries are remaining,
         // fail the operation.
-        if (!retryPolicy.allowRetry(retries, Instant.EPOCH.toEpochMilli() - startTime, RetryLoop.getDefaultRetrySleeper())) {
+        if (!retryPolicy.allowRetry(retries, Instant.now().toEpochMilli() - startTime, RetryLoop.getDefaultRetrySleeper())) {
           throw new VertxException("failed to acquire optimistic lock");
         }
       }
@@ -185,13 +185,21 @@ abstract class ZKMap<K, V> {
 
   void checkExists(String path, AsyncResultHandler<Boolean> handler) {
     try {
-      curator.checkExists().inBackground((clientCheck, eventCheck) -> {
-        if (eventCheck.getType() == CuratorEventType.EXISTS) {
-          if (eventCheck.getStat() == null) {
-            vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(false)));
-          } else {
-            vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(true)));
+      curator.sync().inBackground((clientSync, eventSync) -> {
+        try {
+          if (eventSync.getType() == CuratorEventType.SYNC) {
+            curator.checkExists().inBackground((clientCheck, eventCheck) -> {
+              if (eventCheck.getType() == CuratorEventType.EXISTS) {
+                if (eventCheck.getStat() == null) {
+                  vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(false)));
+                } else {
+                  vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(true)));
+                }
+              }
+            }).forPath(path);
           }
+        } catch (Exception ex) {
+          vertx.runOnContext(aVoid -> handler.handle(Future.failedFuture(ex)));
         }
       }).forPath(path);
     } catch (Exception ex) {
