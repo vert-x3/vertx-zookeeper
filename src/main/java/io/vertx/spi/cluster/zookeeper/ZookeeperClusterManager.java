@@ -1,6 +1,7 @@
 package io.vertx.spi.cluster.zookeeper;
 
 import io.vertx.core.*;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.AsyncMap;
@@ -27,10 +28,7 @@ import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -56,10 +54,10 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private RetryPolicy retryPolicy;
   private Map<String, ZKLock> locks = new ConcurrentHashMap<>();
 
-  private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.properties";
-  private static final String CONFIG_FILE = "zookeeper.properties";
+  private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.json";
+  private static final String CONFIG_FILE = "zookeeper.json";
   private static final String ZK_SYS_CONFIG_KEY = "vertx.zookeeper.config";
-  private Properties conf = new Properties();
+  private JsonObject conf = new JsonObject();
 
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_COUNTERS = "/counters/";
@@ -87,7 +85,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     this.customCuratorCluster = true;
   }
 
-  public ZookeeperClusterManager(Properties config) {
+  public ZookeeperClusterManager(JsonObject config) {
     this.conf = config;
   }
 
@@ -103,8 +101,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private void loadProperties(String resourceLocation) {
     try {
-      conf.load(getConfigStream(resourceLocation));
-      log.info("Loaded Zookeeper.properties file from resourceLocation=" + resourceLocation);
+      BufferedReader reader = new BufferedReader(new InputStreamReader(new BufferedInputStream(getConfigStream(resourceLocation))));
+      String line;
+      StringBuilder sb = new StringBuilder();
+      while ((line = reader.readLine()) != null) {
+        sb.append(line);
+      }
+      conf = new JsonObject(sb.toString());
+      log.info("Loaded zookeeper.json file from resourceLocation=" + resourceLocation);
     } catch (FileNotFoundException e) {
       log.error("Could not find zookeeper config file", e);
     } catch (IOException e) {
@@ -129,11 +133,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     return is;
   }
 
-  public void setConfig(Properties conf) {
+  public void setConfig(JsonObject conf) {
     this.conf = conf;
   }
 
-  public Properties getConfig() {
+  public JsonObject getConfig() {
     return conf;
   }
 
@@ -251,15 +255,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
         if (curator == null) {
           retryPolicy = new ExponentialBackoffRetry(
-            Integer.valueOf(conf.getProperty("retry.initialSleepTime", "100")),
-            Integer.valueOf(conf.getProperty("retry.maxTimes", "5")),
-            Integer.valueOf(conf.getProperty("retry.intervalTimes", "10000")));
+            conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
+            conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
+            conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
 
           curator = CuratorFrameworkFactory.builder()
-            .connectString(conf.getProperty("hosts.zookeeper", "127.0.0.1"))
-            .namespace(conf.getProperty("path.root", "io.vertx"))
-            .sessionTimeoutMs(Integer.valueOf(conf.getProperty("timeout.session", "20000")))
-            .connectionTimeoutMs(Integer.valueOf(conf.getProperty("timeout.connect", "3000")))
+            .connectString(conf.getString("zookeeperHosts", "127.0.0.1"))
+            .namespace(conf.getString("rootPath", "io.vertx"))
+            .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
+            .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
             .retryPolicy(retryPolicy).build();
         }
         curator.start();
@@ -342,12 +346,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     switch (newState) {
       case LOST:
         //release locks and clean locks
-        locks.values().stream().forEach(ZKLock::release);
+        locks.values().forEach(ZKLock::release);
         locks.clear();
         break;
       case SUSPENDED:
         //just release locks on this node.
-        locks.values().stream().forEach(ZKLock::release);
+        locks.values().forEach(ZKLock::release);
         break;
       case RECONNECTED:
         break;

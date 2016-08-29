@@ -1,5 +1,6 @@
 package io.vertx.spi.cluster.zookeeper;
 
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.spi.cluster.ClusterManager;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
@@ -9,7 +10,6 @@ import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
 
 import java.util.HashSet;
-import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -29,12 +29,13 @@ public class MockZKCluster {
     }
   }
 
-  public Properties getDefaultConfig() {
-    Properties config = new Properties();
-    config.setProperty("hosts.zookeeper", server.getConnectString());
-    config.setProperty("path.root", "io.vertx");
-    config.setProperty("retry.initialSleepTime", "3000");
-    config.setProperty("retry.intervalTimes", "3");
+  public JsonObject getDefaultConfig() {
+    JsonObject config = new JsonObject();
+    config.put("zookeeperHosts", server.getConnectString());
+    config.put("rootPath", "io.vertx");
+    config.put("retry", new JsonObject()
+      .put("initialSleepTime", 3000)
+      .put("maxTimes", 3));
     return config;
   }
 

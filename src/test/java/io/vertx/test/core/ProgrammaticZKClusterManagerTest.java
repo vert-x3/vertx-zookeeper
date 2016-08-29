@@ -2,6 +2,7 @@ package io.vertx.test.core;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
+import io.vertx.core.json.JsonObject;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 import io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager;
 import org.apache.curator.RetryPolicy;
@@ -12,7 +13,6 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -24,9 +24,9 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
   private MockZKCluster zkCluster = new MockZKCluster();
   private RetryPolicy retryPolicy = new ExponentialBackoffRetry(2000, 5, 10000);
 
-  private void testProgrammatic(ZookeeperClusterManager mgr, Properties props) throws Exception {
-    mgr.setConfig(props);
-    assertEquals(props, mgr.getConfig());
+  private void testProgrammatic(ZookeeperClusterManager mgr, JsonObject config) throws Exception {
+    mgr.setConfig(config);
+    assertEquals(config, mgr.getConfig());
     VertxOptions options = new VertxOptions().setClusterManager(mgr).setClustered(true);
     Vertx.clusteredVertx(options, res -> {
       assertTrue(res.succeeded());
@@ -41,7 +41,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
   @Test
   public void testProgrammaticSetConfig() throws Exception {
-    Properties config = zkCluster.getDefaultConfig();
+    JsonObject config = zkCluster.getDefaultConfig();
     ZookeeperClusterManager mgr = new ZookeeperClusterManager();
     mgr.setConfig(config);
     testProgrammatic(mgr, config);
@@ -49,17 +49,17 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
   @Test
   public void testProgrammaticSetWithConstructor() throws Exception {
-    Properties config = zkCluster.getDefaultConfig();
+    JsonObject config = zkCluster.getDefaultConfig();
     ZookeeperClusterManager mgr = new ZookeeperClusterManager(config);
     testProgrammatic(mgr, config);
   }
 
   @Test
   public void testCustomCuratorFramework() throws Exception {
-    Properties config = zkCluster.getDefaultConfig();
+    JsonObject config = zkCluster.getDefaultConfig();
     CuratorFramework curator = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator.start();
     ZookeeperClusterManager mgr = new ZookeeperClusterManager(curator);
@@ -68,16 +68,16 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
   @Test
   public void testEventBusWhenUsingACustomCurator() throws Exception {
-    Properties config = zkCluster.getDefaultConfig();
+    JsonObject config = zkCluster.getDefaultConfig();
     CuratorFramework curator1 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator1.start();
 
     CuratorFramework curator2 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator2.start();
 
@@ -126,16 +126,16 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
   @Test
   public void testSharedDataUsingCustomCurator() throws Exception {
-    Properties config = zkCluster.getDefaultConfig();
+    JsonObject config = zkCluster.getDefaultConfig();
     CuratorFramework curator1 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator1.start();
 
     CuratorFramework curator2 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator2.start();
 
@@ -190,10 +190,10 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
   @Test
   public void testThatExternalCuratorCanBeShutdown() {
     // This instance won't be used by vert.x
-    Properties config = zkCluster.getDefaultConfig();
+    JsonObject config = zkCluster.getDefaultConfig();
     CuratorFramework curator = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator.start();
     String nodeID = UUID.randomUUID().toString();
@@ -238,28 +238,28 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
   @Test
   public void testSharedDataUsingCustomCuratorFrameworks() throws Exception {
-    Properties config = zkCluster.getDefaultConfig();
+    JsonObject config = zkCluster.getDefaultConfig();
     CuratorFramework dataNode1 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     dataNode1.start();
 
     CuratorFramework dataNode2 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     dataNode2.start();
 
     CuratorFramework curator1 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator1.start();
 
     CuratorFramework curator2 = CuratorFrameworkFactory.builder()
-      .connectString(config.getProperty("hosts.zookeeper"))
-      .namespace(config.getProperty("path.root"))
+      .connectString(config.getString("zookeeperHosts"))
+      .namespace(config.getString("rootPath"))
       .retryPolicy(retryPolicy).build();
     curator2.start();
 
