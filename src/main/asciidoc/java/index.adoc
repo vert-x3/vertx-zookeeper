@@ -25,7 +25,7 @@ Distributed Counters
 Cluster managers *do not* handle the event bus inter-node transport, this is done directly by Vert.x with TCP connections.
 
 == How to work
-We are using [Apache Curator](http://curator.apache.org/) framework rather than zookeeper client directly, so
+We are using http://curator.apache.org/[Apache Curator] framework rather than zookeeper client directly, so
 we have a dependency for libraries used in Curator such as `guava`, `slf4j` and of course `zookeeper`.
 
 Since ZK using tree dictionary to store data, we can take root path as namespace default root path is `io.vertx` which in default-zookeeper.json.
