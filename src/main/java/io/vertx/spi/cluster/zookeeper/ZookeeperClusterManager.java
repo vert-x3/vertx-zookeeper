@@ -29,7 +29,10 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
 import java.io.*;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -255,9 +258,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
         if (curator == null) {
           retryPolicy = new ExponentialBackoffRetry(
-            conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
-            conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
-            conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
+              conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
+              conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
+              conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
 
           // Read the zookeeper hosts from a system variable
           String hosts = System.getProperty("vertx.zookeeper.hosts");
@@ -267,11 +270,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           log.info("Zookeeper hosts set to " + hosts);
 
           curator = CuratorFrameworkFactory.builder()
-            .connectString(hosts)
-            .namespace(conf.getString("rootPath", "io.vertx"))
-            .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
-            .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
-            .retryPolicy(retryPolicy).build();
+              .connectString(hosts)
+              .namespace(conf.getString("rootPath", "io.vertx"))
+              .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
+              .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
+              .retryPolicy(retryPolicy).build();
         }
         curator.start();
         nodeID = UUID.randomUUID().toString();
