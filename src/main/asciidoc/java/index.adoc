@@ -54,18 +54,16 @@ choose the wrong one.
 You can also specify the cluster manager programmatically if you are embedding Vert.x by specifying it on the options
 when you are creating your Vert.x instance, for example:
 
-[source,java]
+[source, java]
 ----
 ClusterManager mgr = new ZookeeperClusterManager();
-
 VertxOptions options = new VertxOptions().setClusterManager(mgr);
-
 Vertx.clusteredVertx(options, res -> {
-if (res.succeeded()) {
-Vertx vertx = res.result();
-} else {
-// failed!
-}
+  if (res.succeeded()) {
+    Vertx vertx = res.result();
+  } else {
+    // failed!
+  }
 });
 ----
 
@@ -115,22 +113,20 @@ You can also specify configuration programmatically if embedding:
 JsonObject zkConfig = new JsonObject();
 zkConfig.put("zookeeperHosts", "127.0.0.1");
 zkConfig.put("rootPath", "io.vertx");
+zkConfig.put("retry", new JsonObject()
+    .put("initialSleepTime", 3000)
+    .put("maxTimes", 3));
 
-JsonObject zkRetryConfig = new JsonObject();
-zkRetryConfig.put("initialSleepTime", 1000);
-zkRetryConfig.put("intervalTimes", 3);
-
-zkConfig.put("retry", zkRetryConfig);
 
 ClusterManager mgr = new ZookeeperClusterManager(zkConfig);
 VertxOptions options = new VertxOptions().setClusterManager(mgr);
 
 Vertx.clusteredVertx(options, res -> {
-if (res.succeeded()) {
-Vertx vertx = res.result();
-} else {
-// failed!
-}
+  if (res.succeeded()) {
+    Vertx vertx = res.result();
+  } else {
+    // failed!
+  }
 });
 ----
 

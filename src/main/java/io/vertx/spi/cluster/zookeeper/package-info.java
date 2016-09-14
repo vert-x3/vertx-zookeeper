@@ -1,3 +1,19 @@
+/*
+ *  Copyright (c) 2011-2016 The original author or authors
+ *  ------------------------------------------------------
+ *  All rights reserved. This program and the accompanying materials
+ *  are made available under the terms of the Eclipse Public License v1.0
+ *  and Apache License v2.0 which accompanies this distribution.
+ *
+ *       The Eclipse Public License is available at
+ *       http://www.eclipse.org/legal/epl-v10.html
+ *
+ *       The Apache License v2.0 is available at
+ *       http://www.opensource.org/licenses/apache2.0.php
+ *
+ *  You may elect to redistribute this code under either of these licenses.
+ */
+
 /**
  * = Zookeeper Cluster Manager
  * 
@@ -55,19 +71,9 @@
  * You can also specify the cluster manager programmatically if you are embedding Vert.x by specifying it on the options
  * when you are creating your Vert.x instance, for example:
  * 
- * [source,java]
+ * [source, $lang]
  * ----
- * ClusterManager mgr = new ZookeeperClusterManager();
- * 
- * VertxOptions options = new VertxOptions().setClusterManager(mgr);
- * 
- * Vertx.clusteredVertx(options, res -> {
- * if (res.succeeded()) {
- * Vertx vertx = res.result();
- * } else {
- * // failed!
- * }
- * });
+ * {@link example.Examples#example1()}
  * ----
  * 
  * == Configuring this cluster manager
@@ -113,26 +119,7 @@
  * 
  * [source,java]
  * ----
- * JsonObject zkConfig = new JsonObject();
- * zkConfig.put("zookeeperHosts", "127.0.0.1");
- * zkConfig.put("rootPath", "io.vertx");
- * 
- * JsonObject zkRetryConfig = new JsonObject();
- * zkRetryConfig.put("initialSleepTime", 1000);
- * zkRetryConfig.put("intervalTimes", 3);
- * 
- * zkConfig.put("retry", zkRetryConfig);
- * 
- * ClusterManager mgr = new ZookeeperClusterManager(zkConfig);
- * VertxOptions options = new VertxOptions().setClusterManager(mgr);
- * 
- * Vertx.clusteredVertx(options, res -> {
- * if (res.succeeded()) {
- * Vertx vertx = res.result();
- * } else {
- * // failed!
- * }
- * });
+ * {@link example.Examples#example2()}
  * ----
  *
  * IMPORTANT: You can also configure the zookeeper hosts using the `vertx.zookeeper.hosts` system property.

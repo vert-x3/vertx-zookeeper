@@ -29,8 +29,8 @@ public class Examples {
     zkConfig.put("zookeeperHosts", "127.0.0.1");
     zkConfig.put("rootPath", "io.vertx");
     zkConfig.put("retry", new JsonObject()
-      .put("initialSleepTime", 3000)
-      .put("maxTimes", 3));
+        .put("initialSleepTime", 3000)
+        .put("maxTimes", 3));
 
 
     ClusterManager mgr = new ZookeeperClusterManager(zkConfig);
