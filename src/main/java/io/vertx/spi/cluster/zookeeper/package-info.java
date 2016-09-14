@@ -12,7 +12,7 @@
  <dependency>
  <groupId>io.vertx</groupId>
  <artifactId>vertx-zookeeper</artifactId>
- <version>3.3.1</version>
+ <version>${maven.version}</version>
  </dependency>
  ----
 
@@ -27,10 +27,10 @@
  Cluster managers *do not* handle the event bus inter-node transport, this is done directly by Vert.x with TCP connections.
 
  == How to work
- We are using [Apache Curator](http://curator.apache.org/) framework rather than zookeeper client directly, so
+ We are using http://curator.apache.org/[Apache Curator] framework rather than zookeeper client directly, so
  we have a dependency for libraries used in Curator such as `guava`, `slf4j` and of course `zookeeper`.
 
- Since ZK using tree dictionary to store data, we can take root path as namespace default root path is `io.vertx` which in default-zookeeper.properties.
+ Since ZK using tree dictionary to store data, we can take root path as namespace default root path is `io.vertx` which in default-zookeeper.json.
  and there are another 5 sub path to record other information for functions in vert.x cluster manager, all you can change the path is `root path`.
 
  you can find all the vert.x node information in path of `/io.vertx/cluster/nodes/`,
@@ -41,7 +41,7 @@
 
  == Using this cluster manager
 
- If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-${version}`.jar`
+ If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-${maven.version}`.jar`
  should be in the `lib` directory of the Vert.x installation.
 
  If you want clustering with this cluster manager in your Vert.x Maven or Gradle project then just add a dependency to
@@ -72,21 +72,21 @@
  == Configuring this cluster manager
 
  Usually the cluster manager is configured by a file
- https://github.com/vert-x3/vertx-zookeeper/blob/master/src/main/resources/default-zookeeper.properties[`default-zookeeper.properties`]
+ https://github.com/vert-x3/vertx-zookeeper/blob/master/src/main/resources/default-zookeeper.json[`default-zookeeper.json`]
  which is packaged inside the jar.
 
- If you want to override this configuration you can provide a file called `zookeeper.properties` on your classpath and this
- will be used instead. If you want to embed the `zookeeper.properties` file in a fat jar, it must be located at the root of the
+ If you want to override this configuration you can provide a file called `zookeeper.json` on your classpath and this
+ will be used instead. If you want to embed the `zookeeper.json` file in a fat jar, it must be located at the root of the
  fat jar. If it's an external file, the **directory** containing the file must be added to the classpath. For
  example, if you are using the _launcher_ class from Vert.x, the classpath enhancement can be done as follows:
 
  [source]
  ----
- # If the cluster.xml is in the current directory:
+ # If the zookeeper.json is in the current directory:
  java -jar ... -cp . -cluster
  vertx run MyVerticle -cp . -cluster
 
- # If the zookeeper.properties is in the conf directory
+ # If the zookeeper.json is in the conf directory
  java -jar ... -cp conf -cluster
  ----
 
@@ -96,27 +96,31 @@
  [source]
  ----
  # Use a cluster configuration located in an external file
- java -Dvertx.zookeeper.config=./config/my-zookeeper-conf.properties -jar ... -cluster
+ java -Dvertx.zookeeper.config=./config/my-zookeeper-conf.json -jar ... -cluster
 
  # Or use a custom configuration from the classpath
- java -Dvertx.zookeeper.config=classpath:my/package/config/my-cluster-config.xml -jar ... -cluster
+ java -Dvertx.zookeeper.config=classpath:my/package/config/my-cluster-config.json -jar ... -cluster
  ----
 
- The `vertx.zookeeper.config` system property, when present, overrides any `zookeeper.properties` on the classpath, but if
+ The `vertx.zookeeper.config` system property, when present, overrides any `zookeeper.json` from the classpath, but if
  loading
- from this system property fails, then loading falls back to either `zookeeper.properties` or the Zookeeper default configuration.
+ from this system property fails, then loading falls back to either `zookeeper.json` or the Zookeeper default configuration.
 
- The properties file is described in detail in `default-zookeeper.properties`'s comment.
+ The configuration file is described in detail in `default-zookeeper.json`'s comment.
 
  You can also specify configuration programmatically if embedding:
 
  [source,java]
  ----
- Properties zkConfig = new Properties();
- zkConfig.setProperty("hosts.zookeeper", "127.0.0.1");
- zkConfig.setProperty("path.root", "io.vertx");
- zkConfig.setProperty("retry.initialSleepTime", "1000");
- zkConfig.setProperty("retry.intervalTimes", "3");
+ JsonObject zkConfig = new JsonObject();
+ zkConfig.put("zookeeperHosts", "127.0.0.1");
+ zkConfig.put("rootPath", "io.vertx");
+
+ JsonObject zkRetryConfig = new JsonObject();
+ zkRetryConfig.put("initialSleepTime", 1000);
+ zkRetryConfig.put("intervalTimes", 3);
+
+ zkConfig.put("retry", zkRetryConfig);
 
  ClusterManager mgr = new ZookeeperClusterManager(zkConfig);
  VertxOptions options = new VertxOptions().setClusterManager(mgr);
@@ -149,7 +153,7 @@
  ----
 
  == About Zookeeper version
- We use Curator 2.x.x, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x
+ We use Curator ${curator.version}, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x
  *
  */
 

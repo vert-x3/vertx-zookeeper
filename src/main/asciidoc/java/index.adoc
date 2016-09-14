@@ -39,7 +39,7 @@ you can find all the vert.x node information in path of `/io.vertx/cluster/nodes
 
 == Using this cluster manager
 
-If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-${version}`.jar`
+If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-3.4.0-SNAPSHOT`.jar`
 should be in the `lib` directory of the Vert.x installation.
 
 If you want clustering with this cluster manager in your Vert.x Maven or Gradle project then just add a dependency to
@@ -80,7 +80,7 @@ example, if you are using the _launcher_ class from Vert.x, the classpath enhanc
 
 [source]
 ----
-# If the cluster.xml is in the current directory:
+# If the zookeeper.json is in the current directory:
 java -jar ... -cp . -cluster
 vertx run MyVerticle -cp . -cluster
 
@@ -97,14 +97,14 @@ location:
 java -Dvertx.zookeeper.config=./config/my-zookeeper-conf.json -jar ... -cluster
 
 # Or use a custom configuration from the classpath
-java -Dvertx.zookeeper.config=classpath:my/package/config/my-cluster-config.xml -jar ... -cluster
+java -Dvertx.zookeeper.config=classpath:my/package/config/my-cluster-config.json -jar ... -cluster
 ----
 
-The `vertx.zookeeper.config` system property, when present, overrides any `zookeeper.json` on the classpath, but if
+The `vertx.zookeeper.config` system property, when present, overrides any `zookeeper.json` from the classpath, but if
 loading
 from this system property fails, then loading falls back to either `zookeeper.json` or the Zookeeper default configuration.
 
-The properties file is described in detail in `default-zookeeper.json`'s comment.
+The configuration file is described in detail in `default-zookeeper.json`'s comment.
 
 You can also specify configuration programmatically if embedding:
 
@@ -151,4 +151,4 @@ java.util.logging.FileHandler.level=INFO
 ----
 
 == About Zookeeper version
-We use Curator 2.x.x, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x
+We use Curator 2.11.0, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x
