@@ -17,10 +17,12 @@ This implementation is packaged inside:
 In Vert.x a cluster manager is used for various functions including:
 
 Discovery and group membership of Vert.x nodes in a cluster
-Maintaining cluster wide topic subscriber lists (so we know which nodes are interested in which event bus addresses)
-Distributed Map support
-Distributed Locks
-Distributed Counters
+Maintaining cluster wide topic subscriber lists (so we know which nodes are interested in which event bus
+addresses)
+
+* Distributed Map support
+* Distributed Locks
+* Distributed Counters
 
 Cluster managers *do not* handle the event bus inter-node transport, this is done directly by Vert.x with TCP connections.
 
@@ -131,6 +133,8 @@ Vertx vertx = res.result();
 }
 });
 ----
+
+IMPORTANT: You can also configure the zookeeper hosts using the `vertx.zookeeper.hosts` system property.
 
 === Enabling logging
 

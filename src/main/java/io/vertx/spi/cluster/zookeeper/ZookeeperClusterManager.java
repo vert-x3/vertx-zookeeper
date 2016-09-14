@@ -259,8 +259,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
             conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
             conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
 
+          // Read the zookeeper hosts from a system variable
+          String hosts = System.getProperty("vertx.zookeeper.hosts");
+          if (hosts == null) {
+            hosts = conf.getString("zookeeperHosts", "127.0.0.1");
+          }
+          log.info("Zookeeper hosts set to " + hosts);
+
           curator = CuratorFrameworkFactory.builder()
-            .connectString(conf.getString("zookeeperHosts", "127.0.0.1"))
+            .connectString(hosts)
             .namespace(conf.getString("rootPath", "io.vertx"))
             .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
             .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
