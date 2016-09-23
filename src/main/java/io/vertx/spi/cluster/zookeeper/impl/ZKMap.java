@@ -15,7 +15,9 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.*;
+import io.vertx.core.Future;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxException;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.shareddata.impl.ClusterSerializable;
 import org.apache.curator.RetryLoop;
@@ -29,7 +31,6 @@ import org.apache.zookeeper.data.Stat;
 
 import java.io.*;
 import java.time.Instant;
-import java.util.Objects;
 import java.util.stream.Stream;
 
 /**
@@ -57,25 +58,27 @@ abstract class ZKMap<K, V> {
   }
 
   String keyPath(K k) {
-    Objects.requireNonNull(k, "key should not be null.");
     return mapPath + "/" + k.toString();
   }
 
   String valuePath(K k, Object v) {
-    Objects.requireNonNull(v, "value should not be null.");
     return keyPath(k) + "/" + v.toString();
   }
 
-  <T> boolean keyIsNull(Object key, Handler<AsyncResult<T>> handler) {
+  Future<Void> assertKeyIsNotNull(Object key) {
     boolean result = key == null;
-    if (result) handler.handle(Future.failedFuture("key can not be null."));
-    return result;
+    if (result) return Future.failedFuture("key can not be null.");
+    else return Future.succeededFuture();
   }
 
-  <T> boolean valueIsNull(Object value, Handler<AsyncResult<T>> handler) {
+  Future<Void> assertValueIsNotNull(Object value) {
     boolean result = value == null;
-    if (result) handler.handle(Future.failedFuture("value can not be null."));
-    return result;
+    if (result) return Future.failedFuture("value can not be null.");
+    else return Future.succeededFuture();
+  }
+
+  Future<Void> assertKeyAndValueAreNotNull(Object key, Object value) {
+    return assertKeyIsNotNull(key).compose(aVoid -> assertValueIsNotNull(value));
   }
 
   byte[] asByte(Object object) throws IOException {
@@ -122,27 +125,6 @@ abstract class ZKMap<K, V> {
       in.readFully(body);
       ObjectInputStream objectIn = new ObjectInputStream(new ByteArrayInputStream(body));
       return (T) objectIn.readObject();
-    }
-  }
-
-  <T, E> void forwardAsyncResult(Handler<AsyncResult<T>> completeHandler, AsyncResult<E> asyncResult) {
-    if (asyncResult.succeeded()) {
-      E result = asyncResult.result();
-      if (result == null || result instanceof Void) {
-        vertx.runOnContext(event -> completeHandler.handle(Future.succeededFuture()));
-      } else {
-        vertx.runOnContext(event -> completeHandler.handle(Future.succeededFuture((T) result)));
-      }
-    } else {
-      vertx.runOnContext(aVoid -> completeHandler.handle(Future.failedFuture(asyncResult.cause())));
-    }
-  }
-
-  <T, E> void forwardAsyncResult(Handler<AsyncResult<T>> completeHandler, AsyncResult<E> asyncResult, T result) {
-    if (asyncResult.succeeded()) {
-      vertx.runOnContext(event -> completeHandler.handle(Future.succeededFuture(result)));
-    } else {
-      vertx.runOnContext(aVoid -> completeHandler.handle(Future.failedFuture(asyncResult.cause())));
     }
   }
 
@@ -194,11 +176,12 @@ abstract class ZKMap<K, V> {
     }
   }
 
-  void checkExists(K k, AsyncResultHandler<Boolean> handler) {
-    checkExists(keyPath(k), handler);
+  Future<Boolean> checkExists(K k) {
+    return checkExists(keyPath(k));
   }
 
-  void checkExists(String path, AsyncResultHandler<Boolean> handler) {
+  Future<Boolean> checkExists(String path) {
+    Future<Boolean> future = Future.future();
     try {
       curator.sync().inBackground((clientSync, eventSync) -> {
         try {
@@ -206,27 +189,29 @@ abstract class ZKMap<K, V> {
             curator.checkExists().inBackground((clientCheck, eventCheck) -> {
               if (eventCheck.getType() == CuratorEventType.EXISTS) {
                 if (eventCheck.getStat() == null) {
-                  vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(false)));
+                  vertx.runOnContext(aVoid -> future.complete(false));
                 } else {
-                  vertx.runOnContext(aVoid -> handler.handle(Future.succeededFuture(true)));
+                  vertx.runOnContext(aVoid -> future.complete(true));
                 }
               }
             }).forPath(path);
           }
         } catch (Exception ex) {
-          vertx.runOnContext(aVoid -> handler.handle(Future.failedFuture(ex)));
+          vertx.runOnContext(aVoid -> future.fail(ex));
         }
       }).forPath(path);
     } catch (Exception ex) {
-      vertx.runOnContext(aVoid -> handler.handle(Future.failedFuture(ex)));
+      vertx.runOnContext(aVoid -> future.fail(ex));
     }
+    return future;
   }
 
-  void create(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
-    create(keyPath(k), v, completionHandler);
+  Future<Void> create(K k, V v) {
+    return create(keyPath(k), v);
   }
 
-  void create(String path, V v, Handler<AsyncResult<Void>> completionHandler) {
+  Future<Void> create(String path, V v) {
+    Future<Void> future = Future.future();
     try {
       //there are two type of node - ephemeral and persistent.
       //if path is 'asyncMultiMap/subs/' which save the data of eventbus address and serverID we could using ephemeral,
@@ -234,35 +219,39 @@ abstract class ZKMap<K, V> {
       CreateMode nodeMode = path.contains(EVENTBUS_PATH) ? CreateMode.EPHEMERAL : CreateMode.PERSISTENT;
       curator.create().creatingParentsIfNeeded().withMode(nodeMode).inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
-          vertx.runOnContext(event -> completionHandler.handle(Future.succeededFuture()));
+          vertx.runOnContext(event -> future.complete());
         }
       }).forPath(path, asByte(v));
     } catch (Exception ex) {
-      vertx.runOnContext(event -> completionHandler.handle(Future.failedFuture(ex)));
+      vertx.runOnContext(event -> future.fail(ex));
     }
+    return future;
   }
 
-  void setData(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
-    setData(keyPath(k), v, completionHandler);
+  Future<Void> setData(K k, V v) {
+    return setData(keyPath(k), v);
   }
 
-  void setData(String path, V v, Handler<AsyncResult<Void>> completionHandler) {
+  Future<Void> setData(String path, V v) {
+    Future<Void> future = Future.future();
     try {
       curator.setData().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.SET_DATA) {
-          vertx.runOnContext(e -> completionHandler.handle(Future.succeededFuture()));
+          vertx.runOnContext(e -> future.complete());
         }
       }).forPath(path, asByte(v));
     } catch (Exception ex) {
-      vertx.runOnContext(event -> completionHandler.handle(Future.failedFuture(ex)));
+      vertx.runOnContext(event -> future.fail(ex));
     }
+    return future;
   }
 
-  void delete(K k, V v, Handler<AsyncResult<V>> asyncResultHandler) {
-    delete(keyPath(k), v, asyncResultHandler);
+  Future<V> delete(K k, V v) {
+    return delete(keyPath(k), v);
   }
 
-  void delete(String path, V v, Handler<AsyncResult<V>> asyncResultHandler) {
+  Future<V> delete(String path, V v) {
+    Future<V> future = Future.future();
     try {
       curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.DELETE) {
@@ -273,16 +262,17 @@ abstract class ZKMap<K, V> {
             if (childEvent.getChildren().size() == 0) {
               curator.delete().inBackground((deleteClient, deleteEvent) -> {
                 if (deleteEvent.getType() == CuratorEventType.DELETE)
-                  vertx.runOnContext(ea -> asyncResultHandler.handle(Future.succeededFuture(v)));
+                  vertx.runOnContext(ea -> future.complete(v));
               }).forPath(parentNodePath);
             } else {
-              vertx.runOnContext(ea -> asyncResultHandler.handle(Future.succeededFuture(v)));
+              vertx.runOnContext(ea -> future.complete(v));
             }
           }).forPath(parentNodePath);
         }
       }).forPath(path);
     } catch (Exception ex) {
-      vertx.runOnContext(aVoid -> asyncResultHandler.handle(Future.failedFuture(ex)));
+      vertx.runOnContext(aVoid -> future.fail(ex));
     }
+    return future;
   }
 }

@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -54,31 +53,23 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
   @Override
   public void add(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
-    if (!keyIsNull(k, completionHandler) && !valueIsNull(v, completionHandler)) {
-      String path = valuePath(k, v);
-      checkExists(path, existEvent -> {
-        if (existEvent.succeeded()) {
-          if (existEvent.result()) {
-            setData(path, v, completionHandler);
-          } else {
-            create(path, v, completionHandler);
-          }
-        } else {
-          vertx.runOnContext(event -> completionHandler.handle(Future.failedFuture(existEvent.cause())));
-        }
-      });
-    }
+    String path = valuePath(k, v);
+    assertKeyAndValueAreNotNull(k, v)
+      .compose(aVoid -> checkExists(path))
+      .compose(checkResult -> checkResult ? setData(path, v) : create(path, v))
+      .setHandler(completionHandler);
   }
 
   @Override
   public void get(K k, Handler<AsyncResult<ChoosableIterable<V>>> asyncResultHandler) {
-    if (!keyIsNull(k, asyncResultHandler)) {
-      final String keyPath = keyPath(k);
-      ChoosableSet<V> entries = cache.get(keyPath);
-      if (entries != null && !entries.isEmpty()) {
-        asyncResultHandler.handle(Future.succeededFuture(entries));
-      } else {
-        vertx.runOnContext(event -> {
+    assertKeyIsNotNull(k)
+      .compose(aVoid -> {
+        final String keyPath = keyPath(k);
+        ChoosableSet<V> entries = cache.get(keyPath);
+        Future<ChoosableIterable<V>> future = Future.future();
+        if (entries != null && !entries.isEmpty()) {
+          future.complete(entries);
+        } else {
           Map<String, ChildData> maps = treeCache.getCurrentChildren(keyPath);
           ChoosableSet<V> newEntries = new ChoosableSet<>(maps != null ? maps.size() : 0);
           if (maps != null) {
@@ -88,50 +79,51 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
                   newEntries.add(asObject(childData.getData()));
                 }
               } catch (Exception ex) {
-                asyncResultHandler.handle(Future.failedFuture(ex));
+                future.fail(ex);
               }
             }
             cache.putIfAbsent(keyPath, newEntries);
           }
-          asyncResultHandler.handle(Future.succeededFuture(newEntries));
-        });
-      }
-    }
+          future.complete(newEntries);
+        }
+        return future;
+      })
+      .setHandler(asyncResultHandler);
   }
 
   @Override
   public void remove(K k, V v, Handler<AsyncResult<Boolean>> completionHandler) {
-    if (!keyIsNull(k, completionHandler) && !valueIsNull(v, completionHandler)) {
-      String fullPath = valuePath(k, v);
-      remove(keyPath(k), v, fullPath, completionHandler);
-    }
+    assertKeyAndValueAreNotNull(k, v)
+      .compose(aVoid -> {
+        String fullPath = valuePath(k, v);
+        return remove(keyPath(k), v, fullPath);
+      })
+      .setHandler(completionHandler);
   }
 
-  private void remove(String keyPath, V v, String fullPath, Handler<AsyncResult<Boolean>> completionHandler) {
-    checkExists(fullPath, existEvent -> {
-      if (existEvent.succeeded()) {
-        if (existEvent.result()) {
-          Optional.ofNullable(treeCache.getCurrentData(fullPath))
-            .ifPresent(childData -> delete(fullPath, null, deleteEvent -> {
-              //delete cache
-              Optional.ofNullable(cache.get(keyPath)).ifPresent(vs -> {
-                vs.remove(v);
-                cache.put(keyPath, vs);
-              });
-              forwardAsyncResult(completionHandler, deleteEvent, true);
-            }));
-        } else {
-          vertx.runOnContext(event -> completionHandler.handle(Future.succeededFuture(false)));
-        }
+  private Future<Boolean> remove(String keyPath, V v, String fullPath) {
+    return checkExists(fullPath).compose(checkResult -> {
+      Future<Boolean> future = Future.future();
+      if (checkResult) {
+        Optional.ofNullable(treeCache.getCurrentData(fullPath))
+          .ifPresent(childData -> delete(fullPath, null).setHandler(deleteResult -> {
+            //delete cache
+            Optional.ofNullable(cache.get(keyPath)).ifPresent(vs -> {
+              vs.remove(v);
+              cache.put(keyPath, vs);
+            });
+            future.complete(true);
+          }));
       } else {
-        vertx.runOnContext(event -> completionHandler.handle(Future.failedFuture(existEvent.cause())));
+        future.complete(false);
       }
+      return future;
     });
   }
 
   @Override
   public void removeAllForValue(V v, Handler<AsyncResult<Void>> completionHandler) {
-    List<CompletableFuture> futures = new ArrayList<>();
+    List<Future> futures = new ArrayList<>();
     Optional.ofNullable(treeCache.getCurrentChildren(mapPath)).ifPresent(childDataMap -> {
       childDataMap.keySet().forEach(partKeyPath -> {
         String keyPath = mapPath + "/" + partKeyPath;
@@ -143,29 +135,20 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
               try {
                 V value = asObject(childData.getData());
                 if (v.hashCode() == value.hashCode()) {
-                  CompletableFuture future = new CompletableFuture();
-                  remove(keyPath, v, fullPath, removeEvent -> {
-                    if (removeEvent.succeeded()) future.complete(null);
-                    else future.completeExceptionally(removeEvent.cause());
-                  });
-                  futures.add(future);
+                  futures.add(remove(keyPath, v, fullPath));
                 }
               } catch (Exception e) {
-                vertx.runOnContext(aVoid -> completionHandler.handle(Future.failedFuture(e)));
+                futures.add(Future.failedFuture(e));
               }
             });
         });
       });
       //
-      CompletableFuture
-        .allOf(futures.toArray(new CompletableFuture[futures.size()]))
-        .whenComplete((result, throwable) -> {
-          if (throwable != null) {
-            vertx.runOnContext(aVoid -> completionHandler.handle(Future.failedFuture(throwable)));
-          } else {
-            vertx.runOnContext(aVoid -> completionHandler.handle(Future.succeededFuture()));
-          }
-        });
+      CompositeFuture.all(futures).compose(compositeFuture -> {
+        Future<Void> future = Future.future();
+        future.complete();
+        return future;
+      }).setHandler(completionHandler);
     });
   }
 
