@@ -15,7 +15,12 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.*;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Future;
+import io.vertx.core.Handler;
+import io.vertx.core.TimeoutStream;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxException;
 import io.vertx.core.shareddata.AsyncMap;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.ChildData;
@@ -76,9 +81,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   @Override
   public void put(K k, V v, long timeout, Handler<AsyncResult<Void>> completionHandler) {
-    TimeoutStream timeoutStream = vertx.timerStream(timeout);
-    timeoutStream.handler(aLong -> completionHandler.handle(Future.failedFuture("timeout on method put.")));
-    put(k, v, Optional.of(timeoutStream), completionHandler);
+    completionHandler.handle(Future.failedFuture(new UnsupportedOperationException()));
   }
 
   private void put(K k, V v, Optional<TimeoutStream> timeoutStream, Handler<AsyncResult<Void>> completionHandler) {
@@ -102,9 +105,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   @Override
   public void putIfAbsent(K k, V v, long timeout, Handler<AsyncResult<V>> completionHandler) {
-    TimeoutStream timeoutStream = vertx.timerStream(timeout);
-    timeoutStream.handler(aLong -> completionHandler.handle(Future.failedFuture("timeout on method putIfAbsent.")));
-    putIfAbsent(k, v, Optional.of(timeoutStream), completionHandler);
+    completionHandler.handle(Future.failedFuture(new UnsupportedOperationException()));
   }
 
   private void putIfAbsent(K k, V v, Optional<TimeoutStream> timeoutStream, Handler<AsyncResult<V>> completionHandler) {
