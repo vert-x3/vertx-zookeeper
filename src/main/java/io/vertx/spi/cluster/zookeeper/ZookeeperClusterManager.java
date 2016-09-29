@@ -185,7 +185,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public <K, V> void getAsyncMap(String name, Handler<AsyncResult<AsyncMap<K, V>>> handler) {
-    vertx.runOnContext(event -> handler.handle(Future.succeededFuture(new ZKAsyncMap<>(vertx, curator, name))));
+    vertx.runOnContext(event -> handler.handle(Future.succeededFuture(new ZKAsyncMap<>(vertx, curator, this, name))));
   }
 
   @Override
@@ -273,9 +273,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
         if (curator == null) {
           retryPolicy = new ExponentialBackoffRetry(
-              conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
-              conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
-              conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
+            conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
+            conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
+            conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
 
           // Read the zookeeper hosts from a system variable
           String hosts = System.getProperty("vertx.zookeeper.hosts");
@@ -285,11 +285,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           log.info("Zookeeper hosts set to " + hosts);
 
           curator = CuratorFrameworkFactory.builder()
-              .connectString(hosts)
-              .namespace(conf.getString("rootPath", "io.vertx"))
-              .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
-              .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
-              .retryPolicy(retryPolicy).build();
+            .connectString(hosts)
+            .namespace(conf.getString("rootPath", "io.vertx"))
+            .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
+            .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
+            .retryPolicy(retryPolicy).build();
         }
         curator.start();
         nodeID = UUID.randomUUID().toString();
