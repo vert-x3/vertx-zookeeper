@@ -16,6 +16,8 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.*;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
 import io.vertx.core.spi.cluster.ChoosableIterable;
 import org.apache.curator.framework.CuratorFramework;
@@ -24,12 +26,14 @@ import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+
+import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_ADDED;
+import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_REMOVED;
 
 /**
  * Created by Stream.Liu
@@ -38,6 +42,11 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
   private TreeCache treeCache;
   private ConcurrentMap<String, ChoosableSet<V>> cache = new ConcurrentHashMap<>();
+  //we should have a snapshot cache which could make event bus information restore to the zk while node get reconnection event.
+  //we come across this issue while internal network is unstable.
+  private ConcurrentMap<String, ChoosableSet<V>> eventBusSnapshotCache = new ConcurrentHashMap<>();
+
+  private static final Logger logger = LoggerFactory.getLogger(ZKAsyncMultiMap.class);
 
   public ZKAsyncMultiMap(Vertx vertx, CuratorFramework curator, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MULTI_MAP, mapName);
@@ -57,6 +66,18 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
     assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> checkExists(path))
       .compose(checkResult -> checkResult ? setData(path, v) : create(path, v))
+      .compose(aVoid -> {
+        //add to snapshot cache if path contains eventbus address
+        if (path.contains(EVENTBUS_PATH)) {
+          ChoosableSet<V> serverIDs = eventBusSnapshotCache.get(path);
+          if (serverIDs == null) serverIDs = new ChoosableSet<>(1);
+          serverIDs.add(v);
+          eventBusSnapshotCache.put(path, serverIDs);
+        }
+        Future<Void> future = Future.future();
+        future.complete();
+        return future;
+      })
       .setHandler(completionHandler);
   }
 
@@ -107,11 +128,13 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
       if (checkResult) {
         Optional.ofNullable(treeCache.getCurrentData(fullPath))
           .ifPresent(childData -> delete(fullPath, null).setHandler(deleteResult -> {
-            //delete cache
-            Optional.ofNullable(cache.get(keyPath)).ifPresent(vs -> {
-              vs.remove(v);
-              cache.put(keyPath, vs);
-            });
+            //delete snapshot cache if keyPath contains event bus address
+            if (keyPath.contains(EVENTBUS_PATH)) {
+              Optional.ofNullable(eventBusSnapshotCache.get(keyPath)).ifPresent(vs -> {
+                vs.remove(v);
+                eventBusSnapshotCache.put(keyPath, vs);
+              });
+            }
             future.complete(true);
           }));
       } else {
@@ -152,7 +175,32 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
     });
   }
 
+  private Future<Void> restoreSnapshotCache() {
+    Future<Void> futureResult = Future.future();
+    List<Future> allFuture = eventBusSnapshotCache.entrySet().stream().map(entry -> {
+      String path = entry.getKey().substring(mapPath.length() + 1).split("/", 2)[0];
+      ChoosableSet<V> values = entry.getValue();
+      List<Future> futures = values.getIds().stream().map(value -> {
+        Future<Void> future = Future.future();
+        add((K) path, value, future.completer());
+        return future;
+      }).collect(Collectors.toList());
+      return futures;
+    }).flatMap(Collection::stream).collect(Collectors.toList());
+
+    CompositeFuture.all(allFuture).setHandler(event -> {
+      if (event.failed()) {
+        futureResult.fail(event.cause());
+      } else {
+        futureResult.complete();
+      }
+    });
+    return futureResult;
+  }
+
   private class Listener implements TreeCacheListener {
+    private AtomicBoolean reconnected = new AtomicBoolean(false);
+
     private String cachePath(final String key) {
       return mapPath + "/" + key;
     }
@@ -160,13 +208,18 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
     @Override
     public void childEvent(CuratorFramework client, TreeCacheEvent treeCacheEvent) throws Exception {
       final ChildData childData = treeCacheEvent.getData();
+      String[] key = null;
+      ChoosableSet<V> entries = null;
+
       // We only care about events with childData: NODE_ADDED, NODE_REMOVED
-      if (childData == null || mapPath.length() == childData.getPath().length()) {
-        return;
+      if (treeCacheEvent.getType() == NODE_ADDED || treeCacheEvent.getType() == NODE_REMOVED) {
+        if (childData == null || mapPath.length() == childData.getPath().length()) {
+          return;
+        }
+        // Strip off the map prefix and leave the multi-map key path: `<parent>/<child>`
+        key = childData.getPath().substring(mapPath.length() + 1).split("/", 2);
+        entries = cache.computeIfAbsent(cachePath(key[0]), k -> new ChoosableSet<>(1));
       }
-      // Strip off the map prefix and leave the multi-map key path: `<parent>/<child>`
-      final String key[] = childData.getPath().substring(mapPath.length() + 1).split("/", 2);
-      final ChoosableSet<V> entries = cache.computeIfAbsent(cachePath(key[0]), k -> new ChoosableSet<>(1));
 
       // When we only have 1 item in the key[], we're operating on the entire key (e.g. removing it)
       // rather than a child element under the key
@@ -182,10 +235,29 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
           } else {
             // When the child items are serialized into ZK, we use `toString()` to build the path
             // element. When removing, search for the item that has the expected string representation.
-            entries.forEach(entry -> {
+            for (V entry : entries)
               if (entry.toString().equals(key[1])) entries.remove(entry);
+          }
+          //if reconnect status is true, we try to restore eventbus address information to the zookeeper cluster
+          if (reconnected.get()) {
+            reconnected.set(false);
+            restoreSnapshotCache().setHandler(event -> {
+              if (event.failed()) {
+                logger.error("restore eventbus snapshot cache failed.", event.cause());
+              } else {
+                logger.info("restore eventbus snapshot cache success.");
+              }
             });
           }
+          break;
+        case CONNECTION_SUSPENDED:
+          logger.warn("connection to the zookeeper server have suspended.");
+          break;
+        case CONNECTION_RECONNECTED:
+          reconnected.set(true);
+          break;
+        case CONNECTION_LOST:
+          logger.error("connection to the zookeeper server have lost, all the temporary node will be remove.");
           break;
       }
     }

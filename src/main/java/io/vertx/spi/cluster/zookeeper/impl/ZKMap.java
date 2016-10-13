@@ -45,7 +45,7 @@ abstract class ZKMap<K, V> {
 
   static final String ZK_PATH_ASYNC_MAP = "asyncMap";
   static final String ZK_PATH_ASYNC_MULTI_MAP = "asyncMultiMap";
-  private static final String EVENTBUS_PATH = "/" + ZK_PATH_ASYNC_MULTI_MAP + "/__vertx.subs/";
+  static final String EVENTBUS_PATH = "/" + ZK_PATH_ASYNC_MULTI_MAP + "/__vertx.subs/";
   static final String ZK_PATH_SYNC_MAP = "syncMap";
 
   private RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
