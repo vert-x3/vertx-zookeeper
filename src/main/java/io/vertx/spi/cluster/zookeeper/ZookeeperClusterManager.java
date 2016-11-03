@@ -38,8 +38,6 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
-import org.apache.curator.framework.state.ConnectionState;
-import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
@@ -57,7 +55,7 @@ import java.util.stream.Collectors;
  *
  * @author Stream.Liu
  */
-public class ZookeeperClusterManager implements ClusterManager, PathChildrenCacheListener, ConnectionStateListener {
+public class ZookeeperClusterManager implements ClusterManager, PathChildrenCacheListener {
 
   private static final Logger log = LoggerFactory.getLogger(ZookeeperClusterManager.class);
   private Vertx vertx;
@@ -273,9 +271,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
         if (curator == null) {
           retryPolicy = new ExponentialBackoffRetry(
-              conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
-              conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
-              conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
+            conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
+            conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
+            conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
 
           // Read the zookeeper hosts from a system variable
           String hosts = System.getProperty("vertx.zookeeper.hosts");
@@ -285,11 +283,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           log.info("Zookeeper hosts set to " + hosts);
 
           curator = CuratorFrameworkFactory.builder()
-              .connectString(hosts)
-              .namespace(conf.getString("rootPath", "io.vertx"))
-              .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
-              .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
-              .retryPolicy(retryPolicy).build();
+            .connectString(hosts)
+            .namespace(conf.getString("rootPath", "io.vertx"))
+            .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
+            .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
+            .retryPolicy(retryPolicy).build();
         }
         curator.start();
         nodeID = UUID.randomUUID().toString();
@@ -357,28 +355,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       case CHILD_UPDATED:
         log.warn("Weird event that update cluster node. path:" + event.getData().getPath());
         break;
-    }
-  }
-
-  /**
-   * some state make effect to the lock, we have to handle it.
-   *
-   * @param client   curator
-   * @param newState the state of connection to the io.vertx.spi.cluster.impl.zookeeper.zookeeper.
-   */
-  @Override
-  public void stateChanged(CuratorFramework client, ConnectionState newState) {
-    switch (newState) {
-      case LOST:
-        //release locks and clean locks
-        locks.values().forEach(ZKLock::release);
-        locks.clear();
-        break;
-      case SUSPENDED:
+      case CONNECTION_SUSPENDED:
         //just release locks on this node.
         locks.values().forEach(ZKLock::release);
         break;
-      case RECONNECTED:
+      case CONNECTION_LOST:
+        //release locks and clean locks
+        locks.values().forEach(ZKLock::release);
+        locks.clear();
         break;
     }
   }
