@@ -34,7 +34,7 @@ public class MockZKCluster {
     config.put("zookeeperHosts", server.getConnectString());
     config.put("rootPath", "io.vertx");
     config.put("retry", new JsonObject()
-      .put("initialSleepTime", 3000)
+      .put("initialSleepTime", 1000)
       .put("maxTimes", 3));
     return config;
   }
@@ -51,8 +51,8 @@ public class MockZKCluster {
   public ClusterManager getClusterManager() {
     CuratorFramework curator = CuratorFrameworkFactory.builder()
       .namespace("io.vertx")
-      .sessionTimeoutMs(10000)
-      .connectionTimeoutMs(5000)
+      .sessionTimeoutMs(3000)
+      .connectionTimeoutMs(1000)
       .connectString(server.getConnectString())
       .retryPolicy(retryPolicy).build();
     curator.start();

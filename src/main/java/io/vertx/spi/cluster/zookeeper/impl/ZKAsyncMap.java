@@ -16,13 +16,8 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.*;
-import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.AsyncMap;
-import io.vertx.core.shareddata.LocalMap;
-import io.vertx.core.spi.cluster.ClusterManager;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
@@ -31,80 +26,25 @@ import org.apache.zookeeper.data.Stat;
 import java.time.Instant;
 import java.util.Optional;
 
+import static io.vertx.spi.cluster.zookeeper.impl.AsyncMapTTLMonitor.*;
+
 /**
  * Created by Stream.Liu
  */
 public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   private final PathChildrenCache curatorCache;
-  private final ClusterManager clusterManager;
+  private AsyncMapTTLMonitor<K, V> asyncMapTTLMonitor;
 
-  private static final Logger logger = LoggerFactory.getLogger(ZKAsyncMap.class);
-
-  private static final String TTL_KEY_HANDLER_ADDRESS = "__VERTX_ZK_TTL_HANDLER_ADDRESS";
-  private static final String TTL_KEY_LOCK = "__VERTX_ZK_TTL_LOCK";
-  private static final String TTL_KEY_BODY_KEY_PATH = "keyPath";
-  private static final String TTL_KEY_BODY_TIMEOUT = "timeout";
-  private static final String TTL_KEY_IS_CANCEL = "isCancel";
-  private static final long TTL_KEY_GET_LOCK_TIMEOUT = 1500;
-  private final LocalMap<String, Long> ttlTimer;
-
-  public ZKAsyncMap(Vertx vertx, CuratorFramework curator, ClusterManager clusterManager, String mapName) {
+  public ZKAsyncMap(Vertx vertx, CuratorFramework curator, AsyncMapTTLMonitor<K,V> asyncMapTTLMonitor, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MAP, mapName);
-    this.clusterManager = clusterManager;
-    curatorCache = new PathChildrenCache(curator, mapPath, true);
-    ttlTimer = vertx.sharedData().getLocalMap("__VERTX_ZK_TTL_TIMER");
-    listenTTLKeyEvent();
+    this.curatorCache = new PathChildrenCache(curator, mapPath, true);
     try {
       curatorCache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
+      this.asyncMapTTLMonitor = asyncMapTTLMonitor;
     } catch (Exception e) {
       throw new VertxException(e);
     }
-  }
-
-  /**
-   * As Zookeeper do not support set TTL value to zkNode, we have to handle it by application self.
-   * 1. Publish a specific message to all consumers that listen ttl action.
-   * 2. All Consumer could receive this message in same time, so we have to make distribution lock as delete action can only
-   * be execute one time.
-   * 3. Check key is exist, and delete if exist, note: we just make a timer to delete if timeout, and we also save timer if we want to cancel
-   * this action in later.
-   * 4. Release lock.
-   * <p>
-   * Still if a put without ttl happens after the put with ttl but before the timeout expires, the most recent update will be removed.
-   * For this case, we should add a field to indicate that if we should stop timer in the cluster.
-   */
-  private void listenTTLKeyEvent() {
-    vertx.eventBus().consumer(TTL_KEY_HANDLER_ADDRESS, (Handler<Message<JsonObject>>) event -> {
-        JsonObject body = event.body();
-        String keyPath = body.getString(TTL_KEY_BODY_KEY_PATH);
-        if (body.getBoolean(TTL_KEY_IS_CANCEL, false)) {
-          long timerID = ttlTimer.remove(body.getString(keyPath));
-          if (timerID > 0) vertx.cancelTimer(timerID);
-        } else {
-          long timerID = vertx.setTimer(body.getLong(TTL_KEY_BODY_TIMEOUT), aLong -> {
-              clusterManager.getLockWithTimeout(TTL_KEY_LOCK, TTL_KEY_GET_LOCK_TIMEOUT, lockAsyncResult -> {
-                if (lockAsyncResult.succeeded()) {
-                  checkExists(keyPath)
-                    .compose(checkResult -> checkResult ? delete(keyPath, null) : Future.succeededFuture())
-                    .setHandler(deleteResult -> {
-                      if (deleteResult.succeeded()) {
-                        lockAsyncResult.result().release();
-                        logger.debug(String.format("The key %s have arrived time, and have been deleted.", keyPath));
-                      } else {
-                        logger.error(String.format("Delete expire key %s failed.", keyPath), deleteResult.cause());
-                      }
-                    });
-                } else {
-                  logger.error("get TTL lock failed.", lockAsyncResult.cause());
-                }
-              });
-            }
-          );
-          ttlTimer.put(keyPath, timerID);
-        }
-      }
-    );
   }
 
   @Override
@@ -150,8 +90,10 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       .compose(checkResult -> checkResult ? setData(k, v) : create(k, v))
       .compose(aVoid -> {
         JsonObject body = new JsonObject().put(TTL_KEY_BODY_KEY_PATH, keyPath(k));
-        if (timeoutOptional.isPresent()) body.put(TTL_KEY_BODY_TIMEOUT, timeoutOptional.get());
-        else body.put(TTL_KEY_IS_CANCEL, true);
+        if (timeoutOptional.isPresent()) {
+          asyncMapTTLMonitor.addAsyncMapWithPath(keyPath(k), this);
+          body.put(TTL_KEY_BODY_TIMEOUT, timeoutOptional.get());
+        } else body.put(TTL_KEY_IS_CANCEL, true);
         //publish a ttl message to all nodes.
         vertx.eventBus().publish(TTL_KEY_HANDLER_ADDRESS, body);
 
@@ -199,8 +141,10 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       })
       .compose(value -> {
         JsonObject body = new JsonObject().put(TTL_KEY_BODY_KEY_PATH, keyPath(k));
-        if (timeoutOptional.isPresent()) body.put(TTL_KEY_BODY_TIMEOUT, timeoutOptional.get());
-        else body.put(TTL_KEY_IS_CANCEL, true);
+        if (timeoutOptional.isPresent()) {
+          asyncMapTTLMonitor.addAsyncMapWithPath(keyPath(k), this);
+          body.put(TTL_KEY_BODY_TIMEOUT, timeoutOptional.get());
+        } else body.put(TTL_KEY_IS_CANCEL, true);
         //publish a ttl message to all nodes.
         vertx.eventBus().publish(TTL_KEY_HANDLER_ADDRESS, body);
 
