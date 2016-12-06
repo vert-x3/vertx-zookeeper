@@ -15,7 +15,12 @@
  */
 package io.vertx.spi.cluster.zookeeper;
 
-import io.vertx.core.*;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Future;
+import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxException;
+import io.vertx.core.impl.ContextImpl;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -42,7 +47,13 @@ import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -195,7 +206,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getLockWithTimeout(String name, long timeout, Handler<AsyncResult<Lock>> resultHandler) {
-    vertx.executeBlocking(future -> {
+    ContextImpl context = (ContextImpl) vertx.getOrCreateContext();
+    // Ordered on the internal blocking executor
+    context.executeBlocking(future -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
         InterProcessSemaphoreMutex mutexLock = new InterProcessSemaphoreMutex(curator, ZK_PATH_LOCKS + name);
@@ -480,28 +493,31 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     }
   }
 
-
   /**
    * Lock implement
    */
   private class ZKLock implements Lock {
-    private InterProcessSemaphoreMutex lock;
+
+    private final InterProcessSemaphoreMutex lock;
 
     private ZKLock(InterProcessSemaphoreMutex lock) {
       this.lock = lock;
     }
 
-    public InterProcessSemaphoreMutex getLock() {
+    InterProcessSemaphoreMutex getLock() {
       return lock;
     }
 
     @Override
     public void release() {
-      try {
-        lock.release();
-      } catch (Exception e) {
-        log.error(e);
-      }
+      vertx.executeBlocking(future -> {
+        try {
+          lock.release();
+        } catch (Exception e) {
+          log.error(e);
+        }
+        future.complete();
+      }, false, null);
     }
   }
 
