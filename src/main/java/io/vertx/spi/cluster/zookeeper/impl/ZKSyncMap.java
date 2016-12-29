@@ -182,7 +182,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
     }).collect(Collectors.toSet());
   }
 
-  private static class KeyValue<K, V> implements Serializable {
+  static class KeyValue<K, V> implements Serializable {
     private K key;
     private V value;
 
