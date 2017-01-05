@@ -208,7 +208,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   public void getLockWithTimeout(String name, long timeout, Handler<AsyncResult<Lock>> resultHandler) {
     ContextImpl context = (ContextImpl) vertx.getOrCreateContext();
     // Ordered on the internal blocking executor
-    context.executeBlocking(future -> {
+    context.executeBlocking(() -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
         InterProcessSemaphoreMutex mutexLock = new InterProcessSemaphoreMutex(curator, ZK_PATH_LOCKS + name);
@@ -217,12 +217,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       try {
         if (lock.getLock().acquire(timeout, TimeUnit.MILLISECONDS)) {
           locks.putIfAbsent(name, lock);
-          future.complete(lock);
+          return lock;
         } else {
-          future.fail(new VertxException("Timed out waiting to get lock " + name));
+          throw new VertxException("Timed out waiting to get lock " + name);
         }
       } catch (Exception e) {
-        future.fail(new VertxException("get lock exception", e));
+        throw new VertxException("get lock exception", e);
       }
     }, resultHandler);
   }
