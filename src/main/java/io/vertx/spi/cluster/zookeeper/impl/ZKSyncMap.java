@@ -18,6 +18,7 @@ package io.vertx.spi.cluster.zookeeper.impl;
 import com.google.common.collect.Maps;
 import io.vertx.core.VertxException;
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
 import java.io.Serializable;
@@ -106,7 +107,8 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
       if (get(key) != null) {
         curator.setData().forPath(keyPath, valueBytes);
       } else {
-        curator.create().creatingParentsIfNeeded().forPath(keyPath, valueBytes);
+        //sync map's node mode should be EPHEMERAL, as lifecycle of this path as long as verticle's.
+        curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(keyPath, valueBytes);
       }
       return value;
     } catch (Exception e) {
