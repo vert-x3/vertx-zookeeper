@@ -9,9 +9,7 @@ import org.apache.curator.test.TestingServer;
 import org.apache.curator.test.Timing;
 import org.junit.Test;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  *
@@ -54,6 +52,10 @@ public class ZKSyncMapTest {
       assertEquals(k, entry.getKey());
       assertEquals(v, entry.getValue());
     });
+
+    String value = syncMap.remove(k);
+    assertEquals(value, v);
+    assertNull(syncMap.get(k));
 
     syncMap.clear();
     assertTrue(syncMap.isEmpty());
