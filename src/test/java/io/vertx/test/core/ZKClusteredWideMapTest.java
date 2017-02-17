@@ -32,7 +32,7 @@ public class ZKClusteredWideMapTest extends ClusterWideMapTestDifferentNodes {
   public void testMapPutTtl() {
     getVertx().sharedData().<String, String>getClusterWideMap("foo", onSuccess(map -> {
       map.put("pipo", "molo", 150, onSuccess(vd -> {
-        vertx.setTimer(180, l -> {
+        vertx.setTimer(500, l -> {
           getVertx().sharedData().<String, String>getClusterWideMap("foo", onSuccess(map2 -> {
             map2.get("pipo", onSuccess(res -> {
               assertNull(res);
@@ -51,7 +51,7 @@ public class ZKClusteredWideMapTest extends ClusterWideMapTestDifferentNodes {
     getVertx().sharedData().<String, String>getClusterWideMap("foo", onSuccess(map -> {
       map.putIfAbsent("pipo", "molo", 150, onSuccess(vd -> {
         assertNull(vd);
-        vertx.setTimer(200, l -> {
+        vertx.setTimer(500, l -> {
           getVertx().sharedData().<String, String>getClusterWideMap("foo", onSuccess(map2 -> {
             map2.get("pipo", onSuccess(res -> {
               assertNull(res);
