@@ -190,7 +190,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
    */
   @Override
   public <K, V> void getAsyncMultiMap(String name, Handler<AsyncResult<AsyncMultiMap<K, V>>> handler) {
-    vertx.runOnContext(event -> handler.handle(Future.succeededFuture(new ZKAsyncMultiMap<>(vertx, curator, name))));
+    vertx.executeBlocking(event -> event.complete(new ZKAsyncMultiMap<>(vertx, curator, name)), handler);
   }
 
   @Override

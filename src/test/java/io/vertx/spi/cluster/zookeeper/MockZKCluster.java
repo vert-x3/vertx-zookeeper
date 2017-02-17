@@ -5,6 +5,7 @@ import io.vertx.core.spi.cluster.ClusterManager;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
@@ -40,12 +41,7 @@ public class MockZKCluster {
   }
 
   public void stop() {
-    try {
-      clusterManagers.forEach(clusterManager -> clusterManager.getCuratorFramework().close());
-      clusterManagers.clear();
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
+    clusterManagers.clear();
   }
 
   public ClusterManager getClusterManager() {
@@ -56,6 +52,14 @@ public class MockZKCluster {
       .connectString(server.getConnectString())
       .retryPolicy(retryPolicy).build();
     curator.start();
+    //there is take up time for zk client thread start up.
+    while (curator.getState() != CuratorFrameworkState.STARTED) {
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
     ZookeeperClusterManager zookeeperClusterManager = new ZookeeperClusterManager(retryPolicy, curator);
     clusterManagers.add(zookeeperClusterManager);
     return zookeeperClusterManager;

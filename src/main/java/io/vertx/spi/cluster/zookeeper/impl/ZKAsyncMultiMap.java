@@ -29,9 +29,12 @@ import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.INITIALIZED;
 import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_ADDED;
 import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_REMOVED;
 
@@ -46,6 +49,9 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
   //we come across this issue while internal network is unstable.
   private ConcurrentMap<String, ChoosableSet<V>> eventBusSnapshotCache = new ConcurrentHashMap<>();
 
+  //the method of treeCache.start() is async and don't provide handle for it
+  //but we can get STATE from Listener;
+  private CountDownLatch startLatch = new CountDownLatch(1);
   private static final Logger logger = LoggerFactory.getLogger(ZKAsyncMultiMap.class);
 
   public ZKAsyncMultiMap(Vertx vertx, CuratorFramework curator, String mapName) {
@@ -55,6 +61,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
     try {
       treeCache.start();
+      startLatch.await(1, TimeUnit.SECONDS);
     } catch (Exception e) {
       throw new VertxException(e);
     }
@@ -207,6 +214,11 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
     @Override
     public void childEvent(CuratorFramework client, TreeCacheEvent treeCacheEvent) throws Exception {
+      if (treeCacheEvent.getType() == INITIALIZED) {
+        startLatch.countDown();
+        return;
+      }
+
       final ChildData childData = treeCacheEvent.getData();
       String[] key = null;
       ChoosableSet<V> entries = null;
