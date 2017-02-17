@@ -41,7 +41,12 @@ public class MockZKCluster {
   }
 
   public void stop() {
-    clusterManagers.clear();
+    try {
+      clusterManagers.forEach(clusterManager -> clusterManager.getCuratorFramework().close());
+      clusterManagers.clear();
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   public ClusterManager getClusterManager() {
