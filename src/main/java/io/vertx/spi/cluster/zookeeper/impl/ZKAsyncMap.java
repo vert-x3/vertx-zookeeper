@@ -21,10 +21,13 @@ import io.vertx.core.shareddata.AsyncMap;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.zookeeper.data.Stat;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static io.vertx.spi.cluster.zookeeper.impl.AsyncMapTTLMonitor.*;
 
@@ -39,9 +42,16 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   public ZKAsyncMap(Vertx vertx, CuratorFramework curator, AsyncMapTTLMonitor<K,V> asyncMapTTLMonitor, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MAP, mapName);
     this.curatorCache = new PathChildrenCache(curator, mapPath, true);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    this.curatorCache.getListenable().addListener((curatorFramework, pathChildrenCacheEvent) -> {
+      if (pathChildrenCacheEvent.getType() == PathChildrenCacheEvent.Type.INITIALIZED) {
+        startLatch.countDown();
+      }
+    });
     try {
       curatorCache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
       this.asyncMapTTLMonitor = asyncMapTTLMonitor;
+      startLatch.await(1, TimeUnit.SECONDS);
     } catch (Exception e) {
       throw new VertxException(e);
     }

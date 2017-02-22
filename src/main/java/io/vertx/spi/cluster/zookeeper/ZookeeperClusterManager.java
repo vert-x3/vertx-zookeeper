@@ -16,7 +16,6 @@
 package io.vertx.spi.cluster.zookeeper;
 
 import io.vertx.core.AsyncResult;
-import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
@@ -47,13 +46,7 @@ import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -196,7 +189,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   @Override
   public <K, V> void getAsyncMap(String name, Handler<AsyncResult<AsyncMap<K, V>>> handler) {
     AsyncMapTTLMonitor<K, V> asyncMapTTLMonitor = AsyncMapTTLMonitor.getInstance(vertx, this);
-    vertx.runOnContext(event -> handler.handle(Future.succeededFuture(new ZKAsyncMap<>(vertx, curator, asyncMapTTLMonitor, name))));
+    vertx.executeBlocking(event -> event.complete(new ZKAsyncMap<>(vertx, curator, asyncMapTTLMonitor, name)), handler);
   }
 
   @Override
@@ -305,6 +298,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
             .retryPolicy(retryPolicy).build();
         }
         curator.start();
+        while (curator.getState() != CuratorFrameworkState.STARTED) {
+          try {
+            Thread.sleep(100);
+          } catch (InterruptedException e) {
+            if (curator.getState() != CuratorFrameworkState.STARTED) {
+              future.fail("zookeeper client being interrupted while starting.");
+            }
+          }
+        }
         nodeID = UUID.randomUUID().toString();
         try {
           addLocalNodeID();
