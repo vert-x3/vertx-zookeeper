@@ -1,8 +1,6 @@
 package io.vertx.test.core;
 
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Handler;
-import io.vertx.core.VertxOptions;
+import io.vertx.core.*;
 import io.vertx.core.eventbus.*;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
@@ -32,6 +30,7 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
       e.printStackTrace();
     }
   }
+
 
   @Override
   protected <T> void testPublish(T val, Consumer<T> consumer) {
@@ -230,6 +229,24 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     }).completionHandler(ar -> {
       assertTrue(ar.succeeded());
       vertx.setTimer(DELAY_TIME, event -> vertices[1].eventBus().send(ADDRESS1, str));
+    });
+    await();
+  }
+
+  public void testSendFromWorker() throws Exception {
+    String expectedBody = TestUtils.randomAlphaString(20);
+    startNodes(2);
+    vertices[1].eventBus().<String>consumer(ADDRESS1, msg -> {
+      assertEquals(expectedBody, msg.body());
+      testComplete();
+    }).completionHandler(ar -> {
+      assertTrue(ar.succeeded());
+      vertices[0].deployVerticle(new AbstractVerticle() {
+        @Override
+        public void start() throws Exception {
+          vertx.setTimer(DELAY_TIME, event -> vertices[0].eventBus().send(ADDRESS1, expectedBody));
+        }
+      }, new DeploymentOptions().setWorker(true));
     });
     await();
   }

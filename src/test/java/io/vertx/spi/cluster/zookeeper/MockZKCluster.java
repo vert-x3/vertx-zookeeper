@@ -35,8 +35,8 @@ public class MockZKCluster {
     config.put("zookeeperHosts", server.getConnectString());
     config.put("rootPath", "io.vertx");
     config.put("retry", new JsonObject()
-      .put("initialSleepTime", 1000)
-      .put("maxTimes", 3));
+      .put("initialSleepTime", 500)
+      .put("maxTimes", 2));
     return config;
   }
 

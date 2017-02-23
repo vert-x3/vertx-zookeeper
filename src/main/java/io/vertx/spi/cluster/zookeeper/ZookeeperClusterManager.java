@@ -327,19 +327,23 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           try {
             curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
               if (event.getType() == CuratorEventType.DELETE) {
-                clusterNodes.getListenable().removeListener(ZookeeperClusterManager.this);
-                if (!customCuratorCluster && curator.getState() == CuratorFrameworkState.STARTED) {
-                  curator.close();
+                if (customCuratorCluster) {
+                  future.complete();
+                } else {
+                  if (curator.getState() == CuratorFrameworkState.STARTED) {
+                    curator.close();
+                    future.complete();
+                  }
                 }
               }
             }).forPath(ZK_PATH_CLUSTER_NODE + nodeID);
             AsyncMapTTLMonitor.getInstance(vertx, this).stop();
           } catch (Exception e) {
             log.error(e);
+            future.fail(e);
           }
-        }
+        } else future.complete();
       }
-      future.complete();
     }, resultHandler);
   }
 
