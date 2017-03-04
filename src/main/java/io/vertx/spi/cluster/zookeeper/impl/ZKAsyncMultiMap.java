@@ -15,7 +15,12 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.*;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.CompositeFuture;
+import io.vertx.core.Future;
+import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxException;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
@@ -26,17 +31,20 @@ import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.INITIALIZED;
-import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_ADDED;
-import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_REMOVED;
+import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.*;
 
 /**
  * Created by Stream.Liu
@@ -153,6 +161,11 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
   @Override
   public void removeAllForValue(V v, Handler<AsyncResult<Void>> completionHandler) {
+    removeAllMatching(value -> value.hashCode() == v.hashCode(), completionHandler);
+  }
+
+  @Override
+  public void removeAllMatching(Predicate<V> p, Handler<AsyncResult<Void>> completionHandler) {
     List<Future> futures = new ArrayList<>();
     Optional.ofNullable(treeCache.getCurrentChildren(mapPath)).ifPresent(childDataMap -> {
       childDataMap.keySet().forEach(partKeyPath -> {
@@ -164,8 +177,8 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
             .ifPresent(childData -> {
               try {
                 V value = asObject(childData.getData());
-                if (v.hashCode() == value.hashCode()) {
-                  futures.add(remove(keyPath, v, fullPath));
+                if (p.test(value)) {
+                  futures.add(remove(keyPath, value, fullPath));
                 }
               } catch (Exception e) {
                 futures.add(Future.failedFuture(e));
