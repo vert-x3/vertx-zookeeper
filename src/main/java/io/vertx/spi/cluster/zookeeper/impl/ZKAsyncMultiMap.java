@@ -17,6 +17,7 @@ package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.CompositeFuture;
+import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
@@ -98,6 +99,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
   @Override
   public void get(K k, Handler<AsyncResult<ChoosableIterable<V>>> asyncResultHandler) {
+    Context ctx = vertx.getOrCreateContext();
     assertKeyIsNotNull(k)
       .compose(aVoid -> {
         final String keyPath = keyPath(k);
@@ -124,7 +126,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
         }
         return future;
       })
-      .setHandler(asyncResultHandler);
+      .setHandler(ar -> ctx.runOnContext(v -> asyncResultHandler.handle(ar)));
   }
 
   @Override
