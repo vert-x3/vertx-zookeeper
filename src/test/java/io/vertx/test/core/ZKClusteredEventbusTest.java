@@ -113,37 +113,6 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     await();
   }
 
-  @Test
-  @Ignore
-  @Override
-  public void sendNoContext() throws Exception {
-    int size = 1000;
-    ConcurrentLinkedDeque<Integer> expected = new ConcurrentLinkedDeque<>();
-    ConcurrentLinkedDeque<Integer> obtained = new ConcurrentLinkedDeque<>();
-    startNodes(2);
-    CountDownLatch latch = new CountDownLatch(1);
-    vertices[1].eventBus().<Integer>consumer(ADDRESS1, msg -> {
-      obtained.add(msg.body());
-      if (obtained.size() == expected.size()) {
-        assertEquals(new ArrayList<>(expected), new ArrayList<>(obtained));
-        testComplete();
-      }
-    }).completionHandler(ar -> {
-      assertTrue(ar.succeeded());
-      latch.countDown();
-    });
-    latch.await();
-    EventBus bus = vertices[0].eventBus();
-    //send message delay.
-    vertx.setTimer(DELAY_TIME, event -> {
-      for (int i = 0; i < size; i++) {
-        expected.add(i);
-        bus.send(ADDRESS1, i);
-      }
-    });
-    await();
-  }
-
   @Override
   protected <T, R> void testSend(T val, R received, Consumer<T> consumer, DeliveryOptions options) {
     if (vertices == null) {
