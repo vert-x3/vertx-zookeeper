@@ -3,9 +3,15 @@ package io.vertx.test.core;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.VertxOptions;
-import io.vertx.core.eventbus.*;
+import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.eventbus.MessageConsumer;
+import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
+import org.junit.Ignore;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -107,6 +113,9 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     await();
   }
 
+  @Test
+  @Ignore
+  @Override
   public void sendNoContext() throws Exception {
     int size = 1000;
     ConcurrentLinkedDeque<Integer> expected = new ConcurrentLinkedDeque<>();
