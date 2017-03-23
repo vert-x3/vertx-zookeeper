@@ -1,14 +1,16 @@
 package io.vertx.test.core;
 
-import io.vertx.core.*;
-import io.vertx.core.eventbus.*;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Handler;
+import io.vertx.core.VertxOptions;
+import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.eventbus.MessageConsumer;
+import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 
-import java.util.ArrayList;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,7 +32,6 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
       e.printStackTrace();
     }
   }
-
 
   @Override
   protected <T> void testPublish(T val, Consumer<T> consumer) {
@@ -103,34 +104,6 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
       });
     });
 
-    await();
-  }
-
-  public void sendNoContext() throws Exception {
-    int size = 1000;
-    ConcurrentLinkedDeque<Integer> expected = new ConcurrentLinkedDeque<>();
-    ConcurrentLinkedDeque<Integer> obtained = new ConcurrentLinkedDeque<>();
-    startNodes(2);
-    CountDownLatch latch = new CountDownLatch(1);
-    vertices[1].eventBus().<Integer>consumer(ADDRESS1, msg -> {
-      obtained.add(msg.body());
-      if (obtained.size() == expected.size()) {
-        assertEquals(new ArrayList<>(expected), new ArrayList<>(obtained));
-        testComplete();
-      }
-    }).completionHandler(ar -> {
-      assertTrue(ar.succeeded());
-      latch.countDown();
-    });
-    latch.await();
-    EventBus bus = vertices[0].eventBus();
-    //send message delay.
-    vertx.setTimer(DELAY_TIME, event -> {
-      for (int i = 0; i < size; i++) {
-        expected.add(i);
-        bus.send(ADDRESS1, i);
-      }
-    });
     await();
   }
 
@@ -229,24 +202,6 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     }).completionHandler(ar -> {
       assertTrue(ar.succeeded());
       vertx.setTimer(DELAY_TIME, event -> vertices[1].eventBus().send(ADDRESS1, str));
-    });
-    await();
-  }
-
-  public void testSendFromWorker() throws Exception {
-    String expectedBody = TestUtils.randomAlphaString(20);
-    startNodes(2);
-    vertices[1].eventBus().<String>consumer(ADDRESS1, msg -> {
-      assertEquals(expectedBody, msg.body());
-      testComplete();
-    }).completionHandler(ar -> {
-      assertTrue(ar.succeeded());
-      vertices[0].deployVerticle(new AbstractVerticle() {
-        @Override
-        public void start() throws Exception {
-          vertx.setTimer(DELAY_TIME, event -> vertices[0].eventBus().send(ADDRESS1, expectedBody));
-        }
-      }, new DeploymentOptions().setWorker(true));
     });
     await();
   }

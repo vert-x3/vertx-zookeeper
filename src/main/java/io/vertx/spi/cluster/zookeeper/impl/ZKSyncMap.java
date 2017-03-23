@@ -188,7 +188,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
     private K key;
     private V value;
 
-    private KeyValue(K key, V value) {
+    public KeyValue(K key, V value) {
       this.key = key;
       this.value = value;
     }
