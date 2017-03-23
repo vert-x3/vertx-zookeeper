@@ -74,6 +74,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private boolean customCuratorCluster;
   private RetryPolicy retryPolicy;
   private Map<String, ZKLock> locks = new ConcurrentHashMap<>();
+  private Map<String, AsyncMap<?, ?>> asyncMapCache = new ConcurrentHashMap<>();
+  private Map<String, AsyncMultiMap<?, ?>> asyncMultiMapCache = new ConcurrentHashMap<>();
 
   private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.json";
   private static final String CONFIG_FILE = "zookeeper.json";
@@ -183,13 +185,19 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
    */
   @Override
   public <K, V> void getAsyncMultiMap(String name, Handler<AsyncResult<AsyncMultiMap<K, V>>> handler) {
-    vertx.executeBlocking(event -> event.complete(new ZKAsyncMultiMap<>(vertx, curator, name)), handler);
+    vertx.executeBlocking(event -> {
+      AsyncMultiMap asyncMultiMap = asyncMultiMapCache.computeIfAbsent(name, key -> new ZKAsyncMultiMap<>(vertx, curator, name));
+      event.complete(asyncMultiMap);
+    }, handler);
   }
 
   @Override
   public <K, V> void getAsyncMap(String name, Handler<AsyncResult<AsyncMap<K, V>>> handler) {
     AsyncMapTTLMonitor<K, V> asyncMapTTLMonitor = AsyncMapTTLMonitor.getInstance(vertx, this);
-    vertx.executeBlocking(event -> event.complete(new ZKAsyncMap<>(vertx, curator, asyncMapTTLMonitor, name)), handler);
+    vertx.executeBlocking(event -> {
+      AsyncMap zkAsyncMap = asyncMapCache.computeIfAbsent(name, key -> new ZKAsyncMap<>(vertx, curator, asyncMapTTLMonitor, name));
+      event.complete(zkAsyncMap);
+    }, handler);
   }
 
   @Override
