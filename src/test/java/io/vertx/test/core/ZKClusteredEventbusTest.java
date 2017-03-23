@@ -9,6 +9,8 @@ import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
+import org.junit.Ignore;
+import org.junit.Test;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
