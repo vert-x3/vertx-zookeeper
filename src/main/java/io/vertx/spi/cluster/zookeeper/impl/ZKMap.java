@@ -30,6 +30,7 @@ import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
 
 import java.io.*;
+import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.util.stream.Stream;
 
@@ -114,7 +115,15 @@ abstract class ZKMap<K, V> {
       byte[] body = new byte[length];
       in.readFully(body);
       try {
-        ClusterSerializable clusterSerializable = (ClusterSerializable) clazz.newInstance();
+        ClusterSerializable clusterSerializable;
+        //check clazz if have a public Constructor method.
+        if (clazz.getConstructors().length == 0) {
+          Constructor<T> constructor = (Constructor<T>) clazz.getDeclaredConstructor();
+          constructor.setAccessible(true);
+          clusterSerializable = (ClusterSerializable) constructor.newInstance();
+        } else {
+          clusterSerializable = (ClusterSerializable) clazz.newInstance();
+        }
         clusterSerializable.readFromBuffer(0, Buffer.buffer(body));
         return (T) clusterSerializable;
       } catch (Exception e) {

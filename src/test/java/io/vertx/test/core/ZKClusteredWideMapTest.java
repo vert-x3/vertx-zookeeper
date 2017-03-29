@@ -1,5 +1,6 @@
 package io.vertx.test.core;
 
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 import org.junit.Test;
@@ -60,6 +61,17 @@ public class ZKClusteredWideMapTest extends ClusterWideMapTestDifferentNodes {
           }));
         });
       }));
+    }));
+    await();
+  }
+
+  @Test
+  public void testStoreAndGetBuffer() {
+    getVertx().sharedData().<String, Buffer>getClusterWideMap("foo", onSuccess(map -> {
+      map.put("test", Buffer.buffer().appendString("Hello"), onSuccess(putResult -> map.get("test", onSuccess(myBuffer -> {
+        assertEquals("Hello", myBuffer.toString());
+        testComplete();
+      }))));
     }));
     await();
   }
