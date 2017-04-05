@@ -215,12 +215,12 @@ abstract class ZKMap<K, V> {
     return future;
   }
 
-  Future<Void> create(K k, V v) {
+  Future<Stat> create(K k, V v) {
     return create(keyPath(k), v);
   }
 
-  Future<Void> create(String path, V v) {
-    Future<Void> future = Future.future();
+  Future<Stat> create(String path, V v) {
+    Future<Stat> future = Future.future();
     try {
       //there are two type of node - ephemeral and persistent.
       //if path is 'asyncMultiMap/subs/' which save the data of eventbus address and serverID we could using ephemeral,
@@ -228,7 +228,7 @@ abstract class ZKMap<K, V> {
       CreateMode nodeMode = path.contains(EVENTBUS_PATH) ? CreateMode.EPHEMERAL : CreateMode.PERSISTENT;
       curator.create().creatingParentsIfNeeded().withMode(nodeMode).inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
-          vertx.runOnContext(event -> future.complete());
+          vertx.runOnContext(event -> future.complete(el.getStat()));
         }
       }).forPath(path, asByte(v));
     } catch (Exception ex) {
@@ -237,16 +237,16 @@ abstract class ZKMap<K, V> {
     return future;
   }
 
-  Future<Void> setData(K k, V v) {
+  Future<Stat> setData(K k, V v) {
     return setData(keyPath(k), v);
   }
 
-  Future<Void> setData(String path, V v) {
-    Future<Void> future = Future.future();
+  Future<Stat> setData(String path, V v) {
+    Future<Stat> future = Future.future();
     try {
       curator.setData().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.SET_DATA) {
-          vertx.runOnContext(e -> future.complete());
+          vertx.runOnContext(e -> future.complete(event.getStat()));
         }
       }).forPath(path, asByte(v));
     } catch (Exception ex) {
