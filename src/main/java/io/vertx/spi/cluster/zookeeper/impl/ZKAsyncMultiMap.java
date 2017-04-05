@@ -21,6 +21,7 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
 import io.vertx.core.spi.cluster.ChoosableIterable;
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
@@ -29,10 +30,13 @@ import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.INITIALIZED;
 import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_ADDED;
 import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_REMOVED;
 
@@ -42,6 +46,7 @@ import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NOD
 public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<K, V> {
 
   private TreeCache treeCache;
+  private CountDownLatch latch = new CountDownLatch(1);
   private ConcurrentMap<String, ChoosableSet<V>> cache = new ConcurrentHashMap<>();
   //we should have a snapshot cache which could make event bus information restore to the zk while node get reconnection event.
   //we come across this issue while internal network is unstable.
@@ -56,6 +61,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
     try {
       treeCache.start();
+      latch.await(10, TimeUnit.SECONDS);
     } catch (Exception e) {
       throw new VertxException(e);
     }
@@ -67,7 +73,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
     assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> checkExists(path))
       .compose(checkResult -> checkResult ? setData(path, v) : create(path, v))
-      .compose(aVoid -> {
+      .compose(stat -> {
         //add to snapshot cache if path contains eventbus address
         if (path.contains(EVENTBUS_PATH)) {
           ChoosableSet<V> serverIDs = eventBusSnapshotCache.get(path);
@@ -76,7 +82,21 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
           eventBusSnapshotCache.put(path, serverIDs);
         }
         Future<Void> future = Future.future();
-        future.complete();
+        try {
+          curator.sync().inBackground((syncClient, syncEvent) -> {
+            if (syncEvent.getType() == CuratorEventType.SYNC) {
+              curator.getData().inBackground((getClient, getEvent) -> {
+                if (stat == null || stat.getMtime() <= getEvent.getStat().getMtime()) {
+                  vertx.runOnContext(aVoid -> future.complete());
+                } else {
+                  vertx.runOnContext(aVoid -> future.fail("can not get correct zxid."));
+                }
+              }).forPath(path);
+            }
+          }).forPath(path);
+        } catch (Exception ex) {
+          vertx.runOnContext(aVoid -> future.fail(ex));
+        }
         return future;
       })
       .setHandler(completionHandler);
@@ -93,21 +113,30 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
         if (entries != null && !entries.isEmpty()) {
           future.complete(entries);
         } else {
-          Map<String, ChildData> maps = treeCache.getCurrentChildren(keyPath);
-          ChoosableSet<V> newEntries = new ChoosableSet<>(maps != null ? maps.size() : 0);
-          if (maps != null) {
-            for (ChildData childData : maps.values()) {
-              try {
-                if (childData != null && childData.getData() != null && childData.getData().length > 0) {
-                  newEntries.add(asObject(childData.getData()));
+          //sync before get
+          try {
+            curator.sync().inBackground((clientSync, eventSync) -> {
+              if (eventSync.getType() == CuratorEventType.SYNC) {
+                Map<String, ChildData> maps = treeCache.getCurrentChildren(keyPath);
+                ChoosableSet<V> newEntries = new ChoosableSet<>(maps != null ? maps.size() : 0);
+                if (maps != null) {
+                  for (ChildData childData : maps.values()) {
+                    try {
+                      if (childData != null && childData.getData() != null && childData.getData().length > 0) {
+                        newEntries.add(asObject(childData.getData()));
+                      }
+                    } catch (Exception ex) {
+                      ctx.runOnContext(v -> future.fail(ex));
+                    }
+                  }
+                  cache.putIfAbsent(keyPath, newEntries);
                 }
-              } catch (Exception ex) {
-                future.fail(ex);
+                ctx.runOnContext(v -> future.complete(newEntries));
               }
-            }
-            cache.putIfAbsent(keyPath, newEntries);
+            }).forPath(keyPath);
+          } catch (Exception ex) {
+            ctx.runOnContext(v -> future.fail(ex));
           }
-          future.complete(newEntries);
         }
         return future;
       })
@@ -214,6 +243,11 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
     @Override
     public void childEvent(CuratorFramework client, TreeCacheEvent treeCacheEvent) throws Exception {
+      if (treeCacheEvent.getType() == INITIALIZED) {
+        latch.countDown();
+        return;
+      }
+
       final ChildData childData = treeCacheEvent.getData();
       String[] key = null;
       ChoosableSet<V> entries = null;
