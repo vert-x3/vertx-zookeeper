@@ -278,10 +278,10 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         if (customCuratorCluster) {
           try {
             addLocalNodeID();
+            future.complete();
           } catch (VertxException e) {
             future.fail(e);
           }
-          future.complete();
           return;
         }
 
@@ -318,10 +318,10 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         nodeID = UUID.randomUUID().toString();
         try {
           addLocalNodeID();
+          future.complete();
         } catch (Exception e) {
           future.fail(e);
         }
-        future.complete();
       }
     }, resultHandler);
   }
