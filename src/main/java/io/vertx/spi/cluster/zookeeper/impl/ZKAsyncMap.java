@@ -436,12 +436,8 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   @Override
   String keyPath(K k) {
-    System.out.println("ZKAsyncMap.keyPath");
-    System.out.println("k = " + k);
     try {
-      String s = keyPathPrefix() + Base64.getUrlEncoder().encodeToString(asByte(k));
-      System.out.println("s = " + s);
-      return s;
+      return keyPathPrefix() + Base64.getUrlEncoder().encodeToString(asByte(k));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
