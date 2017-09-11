@@ -15,16 +15,32 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.*;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.CompositeFuture;
+import io.vertx.core.Context;
+import io.vertx.core.Future;
+import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxException;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.AsyncMap;
+import io.vertx.core.streams.ReadStream;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.zookeeper.data.Stat;
 
+import java.io.IOException;
 import java.time.Instant;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static io.vertx.spi.cluster.zookeeper.impl.AsyncMapTTLMonitor.*;
 
@@ -283,4 +299,155 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     }
   }
 
+  @Override
+  public void keys(Handler<AsyncResult<Set<K>>> resultHandler) {
+    Context context = vertx.getOrCreateContext();
+    try {
+      curator.getChildren().inBackground((client, event) -> {
+        Set<K> keys = new HashSet<>();
+        for (String base64Key : event.getChildren()) {
+          byte[] binaryKey = Base64.getUrlDecoder().decode(base64Key);
+          K key;
+          try {
+            key = asObject(binaryKey);
+          } catch (Exception e) {
+            context.runOnContext(v -> resultHandler.handle(Future.failedFuture(e)));
+            return;
+          }
+          keys.add(key);
+        }
+        context.runOnContext(v -> resultHandler.handle(Future.succeededFuture(keys)));
+      }).forPath(mapPath);
+    } catch (Exception e) {
+      resultHandler.handle(Future.failedFuture(e));
+    }
+  }
+
+  @Override
+  public void values(Handler<AsyncResult<List<V>>> resultHandler) {
+    Future<Set<K>> keysFuture = Future.future();
+    keys(keysFuture);
+    keysFuture.compose(keys -> {
+      List<Future> futures = new ArrayList<>(keys.size());
+      for (K k : keys) {
+        Future valueFuture = Future.future();
+        get(k, valueFuture);
+        futures.add(valueFuture);
+      }
+      return CompositeFuture.all(futures).map(compositeFuture -> {
+        List<V> values = new ArrayList<>(compositeFuture.size());
+        for (int i = 0; i < compositeFuture.size(); i++) {
+          values.add(compositeFuture.resultAt(i));
+        }
+        return values;
+      });
+    }).setHandler(resultHandler);
+  }
+
+  @Override
+  public void entries(Handler<AsyncResult<Map<K, V>>> resultHandler) {
+    Future<Set<K>> keysFuture = Future.future();
+    keys(keysFuture);
+    keysFuture.map(ArrayList::new).compose(keys -> {
+      List<Future> futures = new ArrayList<>(keys.size());
+      for (K k : keys) {
+        Future valueFuture = Future.future();
+        get(k, valueFuture);
+        futures.add(valueFuture);
+      }
+      return CompositeFuture.all(futures).map(compositeFuture -> {
+        Map<K, V> map = new HashMap<>();
+        for (int i = 0; i < compositeFuture.size(); i++) {
+          map.put(keys.get(i), compositeFuture.resultAt(i));
+        }
+        return map;
+      });
+    }).setHandler(resultHandler);
+  }
+
+  @Override
+  public ReadStream<K> keyStream() {
+    return new IterableStream<>(vertx.getOrCreateContext(), () -> {
+      try {
+        return curator.getChildren().forPath(mapPath);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }, stringKey -> {
+      try {
+        return asObject(Base64.getUrlDecoder().decode(stringKey));
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    });
+  }
+
+  @Override
+  public ReadStream<V> valueStream() {
+    return new IterableStream<>(vertx.getOrCreateContext(), () -> {
+      try {
+        List<String> keys = curator.getChildren().forPath(mapPath);
+        List<byte[]> values = new ArrayList<>(keys.size());
+        for (String key : keys) {
+          ChildData childData = curatorCache.getCurrentData(keyPathPrefix() + key);
+          if (childData != null && childData.getData() != null) {
+            values.add(childData.getData());
+          }
+        }
+        return values;
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }, valueBytes -> {
+      try {
+        return asObject(valueBytes);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    });
+  }
+
+  @Override
+  public ReadStream<Map.Entry<K, V>> entryStream() {
+    return new IterableStream<>(vertx.getOrCreateContext(), () -> {
+      try {
+        List<String> keys = curator.getChildren().forPath(mapPath);
+        Map<String, byte[]> values = new HashMap<>(keys.size());
+        for (String key : keys) {
+          ChildData childData = curatorCache.getCurrentData(keyPathPrefix() + key);
+          if (childData != null && childData.getData() != null) {
+            values.put(key, childData.getData());
+          }
+        }
+        return values.entrySet();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }, rawEntry -> {
+      try {
+        K k = asObject(Base64.getUrlDecoder().decode(rawEntry.getKey()));
+        V v = asObject(rawEntry.getValue());
+        return new AbstractMap.SimpleImmutableEntry<>(k, v);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    });
+  }
+
+  @Override
+  String keyPath(K k) {
+    System.out.println("ZKAsyncMap.keyPath");
+    System.out.println("k = " + k);
+    try {
+      String s = keyPathPrefix() + Base64.getUrlEncoder().encodeToString(asByte(k));
+      System.out.println("s = " + s);
+      return s;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private String keyPathPrefix() {
+    return mapPath + "/";
+  }
 }
