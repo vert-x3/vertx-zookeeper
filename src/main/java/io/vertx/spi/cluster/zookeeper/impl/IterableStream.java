@@ -16,9 +16,11 @@
 
 package io.vertx.spi.cluster.zookeeper.impl;
 
+import io.vertx.core.AsyncResult;
 import io.vertx.core.Context;
+import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import io.vertx.core.streams.ReadStream;
+import io.vertx.core.shareddata.AsyncMapStream;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -29,7 +31,7 @@ import java.util.function.Supplier;
 /**
  * @author Thomas Segismont
  */
-public class IterableStream<IN, OUT> implements ReadStream<OUT> {
+public class IterableStream<IN, OUT> implements AsyncMapStream<OUT> {
 
   private static final int BATCH_SIZE = 10;
 
@@ -45,6 +47,7 @@ public class IterableStream<IN, OUT> implements ReadStream<OUT> {
   private Handler<Void> endHandler;
   private boolean paused;
   private boolean readInProgress;
+  private boolean closed;
 
   public IterableStream(Context context, Supplier<Iterable<IN>> iterableSupplier, Function<IN, OUT> converter) {
     this.context = context;
@@ -54,18 +57,26 @@ public class IterableStream<IN, OUT> implements ReadStream<OUT> {
 
   @Override
   public synchronized IterableStream<IN, OUT> exceptionHandler(Handler<Throwable> handler) {
+    checkClosed();
     this.exceptionHandler = handler;
     return this;
   }
 
+  private void checkClosed() {
+    if (closed) {
+      throw new IllegalArgumentException("Stream is closed");
+    }
+  }
+
   @Override
   public synchronized IterableStream<IN, OUT> handler(Handler<OUT> handler) {
+    checkClosed();
     this.dataHandler = handler;
     context.<Iterable<IN>>executeBlocking(fut -> fut.complete(iterableSupplier.get()), ar -> {
       synchronized (this) {
         if (ar.succeeded()) {
           iterable = ar.result();
-          if (dataHandler != null && !paused) {
+          if (dataHandler != null && !paused && !closed) {
             doRead();
           }
         } else if (exceptionHandler != null) {
@@ -78,12 +89,14 @@ public class IterableStream<IN, OUT> implements ReadStream<OUT> {
 
   @Override
   public synchronized IterableStream<IN, OUT> pause() {
+    checkClosed();
     paused = true;
     return this;
   }
 
   @Override
   public synchronized IterableStream<IN, OUT> resume() {
+    checkClosed();
     if (paused) {
       paused = false;
       if (dataHandler != null) {
@@ -126,11 +139,11 @@ public class IterableStream<IN, OUT> implements ReadStream<OUT> {
   }
 
   private synchronized void emitQueued() {
-    while (!queue.isEmpty() && dataHandler != null && !paused) {
+    while (!queue.isEmpty() && dataHandler != null && !paused && !closed) {
       dataHandler.handle(converter.apply(queue.remove()));
     }
     readInProgress = false;
-    if (dataHandler != null && !paused) {
+    if (dataHandler != null && !paused && !closed) {
       doRead();
     }
   }
@@ -139,5 +152,17 @@ public class IterableStream<IN, OUT> implements ReadStream<OUT> {
   public synchronized IterableStream<IN, OUT> endHandler(Handler<Void> handler) {
     endHandler = handler;
     return this;
+  }
+
+  @Override
+  public void close(Handler<AsyncResult<Void>> completionHandler) {
+    context.runOnContext(v -> {
+      synchronized (this) {
+        closed = true;
+        if (completionHandler != null) {
+          completionHandler.handle(Future.succeededFuture());
+        }
+      }
+    });
   }
 }
