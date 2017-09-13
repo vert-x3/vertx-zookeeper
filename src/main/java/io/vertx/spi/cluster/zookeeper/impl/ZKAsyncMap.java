@@ -24,7 +24,7 @@ import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.AsyncMap;
-import io.vertx.core.shareddata.AsyncMapStream;
+import io.vertx.core.streams.ReadStream;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
@@ -366,7 +366,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   }
 
   @Override
-  public AsyncMapStream<K> keyStream() {
+  public ReadStream<K> keyStream() {
     return new IterableStream<>(vertx.getOrCreateContext(), () -> {
       try {
         return curator.getChildren().forPath(mapPath);
@@ -383,7 +383,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   }
 
   @Override
-  public AsyncMapStream<V> valueStream() {
+  public ReadStream<V> valueStream() {
     return new IterableStream<>(vertx.getOrCreateContext(), () -> {
       try {
         List<String> keys = curator.getChildren().forPath(mapPath);
@@ -408,7 +408,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   }
 
   @Override
-  public AsyncMapStream<Map.Entry<K, V>> entryStream() {
+  public ReadStream<Map.Entry<K, V>> entryStream() {
     return new IterableStream<>(vertx.getOrCreateContext(), () -> {
       try {
         List<String> keys = curator.getChildren().forPath(mapPath);
