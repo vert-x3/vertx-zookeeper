@@ -24,7 +24,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.AsyncMap;
-import io.vertx.core.streams.ReadStream;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
@@ -32,7 +31,6 @@ import org.apache.zookeeper.data.Stat;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -363,75 +361,6 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         return map;
       });
     }).setHandler(resultHandler);
-  }
-
-  @Override
-  public ReadStream<K> keyStream() {
-    return new IterableStream<>(vertx.getOrCreateContext(), () -> {
-      try {
-        return curator.getChildren().forPath(mapPath);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }, stringKey -> {
-      try {
-        return asObject(Base64.getUrlDecoder().decode(stringKey));
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
-  }
-
-  @Override
-  public ReadStream<V> valueStream() {
-    return new IterableStream<>(vertx.getOrCreateContext(), () -> {
-      try {
-        List<String> keys = curator.getChildren().forPath(mapPath);
-        List<byte[]> values = new ArrayList<>(keys.size());
-        for (String key : keys) {
-          ChildData childData = curatorCache.getCurrentData(keyPathPrefix() + key);
-          if (childData != null && childData.getData() != null) {
-            values.add(childData.getData());
-          }
-        }
-        return values;
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }, valueBytes -> {
-      try {
-        return asObject(valueBytes);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
-  }
-
-  @Override
-  public ReadStream<Map.Entry<K, V>> entryStream() {
-    return new IterableStream<>(vertx.getOrCreateContext(), () -> {
-      try {
-        List<String> keys = curator.getChildren().forPath(mapPath);
-        Map<String, byte[]> values = new HashMap<>(keys.size());
-        for (String key : keys) {
-          ChildData childData = curatorCache.getCurrentData(keyPathPrefix() + key);
-          if (childData != null && childData.getData() != null) {
-            values.put(key, childData.getData());
-          }
-        }
-        return values.entrySet();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }, rawEntry -> {
-      try {
-        K k = asObject(Base64.getUrlDecoder().decode(rawEntry.getKey()));
-        V v = asObject(rawEntry.getValue());
-        return new AbstractMap.SimpleImmutableEntry<>(k, v);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
   }
 
   @Override
