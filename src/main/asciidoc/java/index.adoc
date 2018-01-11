@@ -10,7 +10,7 @@ This implementation is packaged inside:
 <dependency>
 <groupId>io.vertx</groupId>
 <artifactId>vertx-zookeeper</artifactId>
-<version>3.5.0</version>
+<version>3.5.1-SNAPSHOT</version>
 </dependency>
 ----
 
@@ -39,7 +39,7 @@ you can find all the vert.x node information in path of `/io.vertx/cluster/nodes
 
 == Using this cluster manager
 
-If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-3.5.0`.jar`
+If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-3.5.1-SNAPSHOT`.jar`
 should be in the `lib` directory of the Vert.x installation.
 
 If you want clustering with this cluster manager in your Vert.x Maven or Gradle project then just add a dependency to
