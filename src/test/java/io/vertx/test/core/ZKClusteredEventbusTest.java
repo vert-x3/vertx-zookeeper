@@ -61,7 +61,7 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
 
   public void await(long delay, TimeUnit timeUnit) {
     //fail fast if test blocking
-    super.await(10, TimeUnit.SECONDS);
+    super.await(30, TimeUnit.SECONDS);
   }
 
   @Override
