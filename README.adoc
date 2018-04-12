@@ -2,7 +2,6 @@
 
 This is a cluster manager implementation for Vert.x that uses http://zookeeper.apache.org/[Zookeeper].
 
-Please see the in-source asciidoc documentation or the main documentation on the web-site for a full description
-of this component:
+Please see the main documentation on the web-site for a full description:
 
-* link:src/main/asciidoc/java/index.adoc[in-source docs]
+* https://vertx.io/docs/vertx-zookeeper/java/[Web-site documentation]
