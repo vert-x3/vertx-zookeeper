@@ -59,10 +59,12 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     zkClustered.stop();
   }
 
+  /*
   public void await(long delay, TimeUnit timeUnit) {
     //fail fast if test blocking
     super.await(30, TimeUnit.SECONDS);
   }
+  */
 
   @Override
   protected ClusterManager getClusterManager() {
