@@ -19,7 +19,6 @@ import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
-import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -213,9 +212,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getLockWithTimeout(String name, long timeout, Handler<AsyncResult<Lock>> resultHandler) {
-    ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
-    // Ordered on the internal blocking executor
-    context.executeBlockingInternal(fut -> {
+    vertx.executeBlocking(fut -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
         InterProcessSemaphoreMutex mutexLock = new InterProcessSemaphoreMutex(curator, ZK_PATH_LOCKS + name);
@@ -231,7 +228,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       } catch (Exception e) {
         throw new VertxException("get lock exception", e);
       }
-    }, resultHandler);
+    }, false, resultHandler);
   }
 
   @Override
