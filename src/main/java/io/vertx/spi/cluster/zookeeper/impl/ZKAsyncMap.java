@@ -24,7 +24,10 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.zookeeper.data.Stat;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static io.vertx.spi.cluster.zookeeper.impl.AsyncMapTTLMonitor.*;
 
@@ -281,6 +284,21 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     } catch (Exception e) {
       resultHandler.handle(Future.failedFuture(e));
     }
+  }
+
+  @Override
+  public void keys(Handler<AsyncResult<Set<K>>> asyncResultHandler) {
+
+  }
+
+  @Override
+  public void values(Handler<AsyncResult<List<V>>> asyncResultHandler) {
+
+  }
+
+  @Override
+  public void entries(Handler<AsyncResult<Map<K, V>>> asyncResultHandler) {
+
   }
 
 }
