@@ -265,11 +265,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     try {
       clusterNodes.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
       //Join to the cluster
-      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
+      createThisNode();
       joined = true;
     } catch (Exception e) {
       throw new VertxException(e);
     }
+  }
+
+  private void createThisNode() throws Exception {
+      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
   }
 
 
@@ -392,9 +396,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         break;
       case CONNECTION_RECONNECTED:
         if (joined) {
-          // ephemeral node will be removed when session expires
-          // need resotre when reconnected
-          curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
+          createThisNode();
         }
         break;
       case CONNECTION_SUSPENDED:
