@@ -73,6 +73,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private NodeListener nodeListener;
   private PathChildrenCache clusterNodes;
   private volatile boolean active;
+  private volatile boolean joined;
 
   private String nodeID;
   private CuratorFramework curator;
@@ -264,10 +265,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     try {
       clusterNodes.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
       //Join to the cluster
-      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
+      createThisNode();
+      joined = true;
     } catch (Exception e) {
       throw new VertxException(e);
     }
+  }
+
+  private void createThisNode() throws Exception {
+      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
   }
 
 
@@ -387,6 +393,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         break;
       case CHILD_UPDATED:
         log.warn("Weird event that update cluster node. path:" + event.getData().getPath());
+        break;
+      case CONNECTION_RECONNECTED:
+        if (joined) {
+          createThisNode();
+        }
         break;
       case CONNECTION_SUSPENDED:
         //just release locks on this node.
