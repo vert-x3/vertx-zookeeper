@@ -19,7 +19,6 @@ import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
-import io.vertx.core.impl.ContextImpl;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -46,7 +45,13 @@ import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -68,6 +73,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private NodeListener nodeListener;
   private PathChildrenCache clusterNodes;
   private volatile boolean active;
+  private volatile boolean joined;
 
   private String nodeID;
   private CuratorFramework curator;
@@ -207,9 +213,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getLockWithTimeout(String name, long timeout, Handler<AsyncResult<Lock>> resultHandler) {
-    ContextImpl context = (ContextImpl) vertx.getOrCreateContext();
-    // Ordered on the internal blocking executor
-    context.executeBlocking(() -> {
+    vertx.executeBlocking(fut -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
         InterProcessSemaphoreMutex mutexLock = new InterProcessSemaphoreMutex(curator, ZK_PATH_LOCKS + name);
@@ -218,14 +222,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       try {
         if (lock.getLock().acquire(timeout, TimeUnit.MILLISECONDS)) {
           locks.putIfAbsent(name, lock);
-          return lock;
+          fut.complete(lock);
         } else {
           throw new VertxException("Timed out waiting to get lock " + name);
         }
       } catch (Exception e) {
         throw new VertxException("get lock exception", e);
       }
-    }, resultHandler);
+    }, false, resultHandler);
   }
 
   @Override
@@ -261,10 +265,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     try {
       clusterNodes.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
       //Join to the cluster
-      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
+      createThisNode();
+      joined = true;
     } catch (Exception e) {
       throw new VertxException(e);
     }
+  }
+
+  private void createThisNode() throws Exception {
+      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
   }
 
 
@@ -384,6 +393,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         break;
       case CHILD_UPDATED:
         log.warn("Weird event that update cluster node. path:" + event.getData().getPath());
+        break;
+      case CONNECTION_RECONNECTED:
+        if (joined) {
+          createThisNode();
+        }
         break;
       case CONNECTION_SUSPENDED:
         //just release locks on this node.

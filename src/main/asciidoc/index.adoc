@@ -10,7 +10,7 @@ This implementation is packaged inside:
 <dependency>
 <groupId>io.vertx</groupId>
 <artifactId>vertx-zookeeper</artifactId>
-<version>3.4.2</version>
+<version>${maven.version}</version>
 </dependency>
 ----
 
@@ -22,7 +22,7 @@ In Vert.x a cluster manager is used for various functions including:
 * Distributed Locks
 * Distributed Counters
 
-Cluster managers *do not* handle the event bus inter-node transport, this is done directly by Vert.x with TCP connections.
+Cluster managersdo not* handle the event bus inter-node transport, this is done directly by Vert.x with TCP connections.
 
 == How to work
 We are using http://curator.apache.org/[Apache Curator] framework rather than zookeeper client directly, so
@@ -39,7 +39,7 @@ you can find all the vert.x node information in path of `/io.vertx/cluster/nodes
 
 == Using this cluster manager
 
-If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-3.4.2`.jar`
+If you are using Vert.x from the command line, the jar corresponding to this cluster manager (it will be named `vertx-zookeeper-${maven.version}`.jar`
 should be in the `lib` directory of the Vert.x installation.
 
 If you want clustering with this cluster manager in your Vert.x Maven or Gradle project then just add a dependency to
@@ -52,17 +52,9 @@ choose the wrong one.
 You can also specify the cluster manager programmatically if you are embedding Vert.x by specifying it on the options
 when you are creating your Vert.x instance, for example:
 
-[source, java]
+[source, $lang]
 ----
-ClusterManager mgr = new ZookeeperClusterManager();
-VertxOptions options = new VertxOptions().setClusterManager(mgr);
-Vertx.clusteredVertx(options, res -> {
-  if (res.succeeded()) {
-    Vertx vertx = res.result();
-  } else {
-    // failed!
-  }
-});
+{@link example.Examples#example1()}
 ----
 
 == Configuring this cluster manager
@@ -73,7 +65,7 @@ which is packaged inside the jar.
 
 If you want to override this configuration you can provide a file called `zookeeper.json` on your classpath and this
 will be used instead. If you want to embed the `zookeeper.json` file in a fat jar, it must be located at the root of the
-fat jar. If it's an external file, the **directory** containing the file must be added to the classpath. For
+fat jar. If it's an external file, the*directory** containing the file must be added to the classpath. For
 example, if you are using the _launcher_ class from Vert.x, the classpath enhancement can be done as follows:
 
 [source]
@@ -108,24 +100,7 @@ You can also specify configuration programmatically if embedding:
 
 [source,java]
 ----
-JsonObject zkConfig = new JsonObject();
-zkConfig.put("zookeeperHosts", "127.0.0.1");
-zkConfig.put("rootPath", "io.vertx");
-zkConfig.put("retry", new JsonObject()
-    .put("initialSleepTime", 3000)
-    .put("maxTimes", 3));
-
-
-ClusterManager mgr = new ZookeeperClusterManager(zkConfig);
-VertxOptions options = new VertxOptions().setClusterManager(mgr);
-
-Vertx.clusteredVertx(options, res -> {
-  if (res.succeeded()) {
-    Vertx vertx = res.result();
-  } else {
-    // failed!
-  }
-});
+{@link example.Examples#example2()}
 ----
 
 IMPORTANT: You can also configure the zookeeper hosts using the `vertx.zookeeper.hosts` system property.
@@ -149,4 +124,4 @@ java.util.logging.FileHandler.level=INFO
 ----
 
 == About Zookeeper version
-We use Curator 2.12.0, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x
+We use Curator ${curator.version}, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x

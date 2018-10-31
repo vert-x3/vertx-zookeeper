@@ -1,10 +1,25 @@
-package io.vertx.test.core;
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Red Hat licenses this file to you under the Apache License, version 2.0
+ * (the "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at:
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
 
-import io.vertx.core.Vertx;
-import io.vertx.core.VertxOptions;
+package io.vertx.core;
+
 import io.vertx.core.json.JsonObject;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 import io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager;
+import io.vertx.test.core.AsyncTestBase;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
