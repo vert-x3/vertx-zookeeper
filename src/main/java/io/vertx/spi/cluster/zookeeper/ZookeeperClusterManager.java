@@ -273,7 +273,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   private void createThisNode() throws Exception {
-      curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
+    //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
+    //child of this path.
+    if (clusterNodes.getCurrentData().size() == 0) {
+      getSyncMap("__vertx.haInfo").clear();
+    }
+    curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
   }
 
 

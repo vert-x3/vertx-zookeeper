@@ -107,8 +107,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
       if (get(key) != null) {
         curator.setData().forPath(keyPath, valueBytes);
       } else {
-        //sync map's node mode should be EPHEMERAL, as lifecycle of this path as long as verticle's.
-        curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(keyPath, valueBytes);
+        curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(keyPath, valueBytes);
       }
       return value;
     } catch (Exception e) {
