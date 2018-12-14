@@ -92,6 +92,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final String ZK_PATH_COUNTERS = "/counters/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
   private static final String ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH = "/cluster/nodes";
+  private static final String VERTX_HA_NODE = "__vertx.haInfo";
 
   public ZookeeperClusterManager() {
     String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
@@ -273,11 +274,26 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   private void createThisNode() throws Exception {
-    //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
-    //child of this path.
-    if (clusterNodes.getCurrentData().size() == 0) {
-      getSyncMap("__vertx.haInfo").clear();
-    }
+    //clean ha node would be happened multi times with multi vertx node in startup, so we have a lock to avoid conflict.
+    this.getLockWithTimeout("__cluster_init_lock", 3000L, lockAsyncResult -> {
+      if (lockAsyncResult.succeeded()) {
+        try {
+          //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
+          //child of this path.
+          if (clusterNodes.getCurrentData().size() == 0
+            && curator.checkExists().forPath("/syncMap") != null
+            && curator.checkExists().forPath("/syncMap/" + VERTX_HA_NODE) != null) {
+            getSyncMap(VERTX_HA_NODE).clear();
+          }
+        } catch (Exception ex) {
+          log.error("check zk node failed.", ex);
+        } finally {
+          lockAsyncResult.result().release();
+        }
+      } else {
+        log.error("get cluster init lock failed.", lockAsyncResult.cause());
+      }
+    });
     curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeID, nodeID.getBytes());
   }
 
