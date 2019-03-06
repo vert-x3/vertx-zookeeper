@@ -150,7 +150,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
               return;
             }
           }
-        }, false, innerFuture.completer());
+        }, false, innerFuture);
         return innerFuture;
       })
       .compose(value -> {
@@ -170,7 +170,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   public void remove(K k, Handler<AsyncResult<V>> asyncResultHandler) {
     assertKeyIsNotNull(k).compose(aVoid -> {
       Future<V> future = Future.future();
-      get(k, future.completer());
+      get(k, future);
       return future;
     }).compose(value -> {
       Future<V> future = Future.future();
@@ -188,7 +188,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> {
         Future<V> future = Future.future();
-        get(k, future.completer());
+        get(k, future);
         return future;
       })
       .compose(value -> {
@@ -233,7 +233,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
               return;
             }
           }
-        }, false, innerFuture.completer());
+        }, false, innerFuture);
         return innerFuture;
       })
       .setHandler(asyncResultHandler);
@@ -268,7 +268,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
               return;
             }
           }
-        }, false, innerFuture.completer());
+        }, false, innerFuture);
         return innerFuture;
       })
       .setHandler(resultHandler);

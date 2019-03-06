@@ -218,7 +218,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
       ChoosableSet<V> values = entry.getValue();
       List<Future> futures = values.getIds().stream().map(value -> {
         Future<Void> future = Future.future();
-        add((K) path, value, future.completer());
+        add((K) path, value, future);
         return future;
       }).collect(Collectors.toList());
       return futures;
