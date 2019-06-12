@@ -16,6 +16,7 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
 import io.vertx.core.buffer.Buffer;
@@ -190,7 +191,7 @@ abstract class ZKMap<K, V> {
   }
 
   Future<Boolean> checkExists(String path) {
-    Future<Boolean> future = Future.future();
+    Promise<Boolean> future = Promise.promise();
     try {
       curator.sync().inBackground((clientSync, eventSync) -> {
         try {
@@ -212,7 +213,7 @@ abstract class ZKMap<K, V> {
     } catch (Exception ex) {
       vertx.runOnContext(aVoid -> future.fail(ex));
     }
-    return future;
+    return future.future();
   }
 
   Future<Stat> create(K k, V v) {
@@ -220,7 +221,7 @@ abstract class ZKMap<K, V> {
   }
 
   Future<Stat> create(String path, V v) {
-    Future<Stat> future = Future.future();
+    Promise<Stat> future = Promise.promise();
     try {
       //there are two type of node - ephemeral and persistent.
       //if path is 'asyncMultiMap/subs/' which save the data of eventbus address and serverID we could using ephemeral,
@@ -234,7 +235,7 @@ abstract class ZKMap<K, V> {
     } catch (Exception ex) {
       vertx.runOnContext(event -> future.fail(ex));
     }
-    return future;
+    return future.future();
   }
 
   Future<Stat> setData(K k, V v) {
@@ -242,7 +243,7 @@ abstract class ZKMap<K, V> {
   }
 
   Future<Stat> setData(String path, V v) {
-    Future<Stat> future = Future.future();
+    Promise<Stat> future = Promise.promise();
     try {
       curator.setData().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.SET_DATA) {
@@ -252,7 +253,7 @@ abstract class ZKMap<K, V> {
     } catch (Exception ex) {
       vertx.runOnContext(event -> future.fail(ex));
     }
-    return future;
+    return future.future();
   }
 
   Future<V> delete(K k, V v) {
@@ -260,7 +261,7 @@ abstract class ZKMap<K, V> {
   }
 
   Future<V> delete(String path, V v) {
-    Future<V> future = Future.future();
+    Promise<V> future = Promise.promise();
     try {
       curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
         if (event.getType() == CuratorEventType.DELETE) {
@@ -282,6 +283,6 @@ abstract class ZKMap<K, V> {
     } catch (Exception ex) {
       vertx.runOnContext(aVoid -> future.fail(ex));
     }
-    return future;
+    return future.future();
   }
 }

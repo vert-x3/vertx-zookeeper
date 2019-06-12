@@ -81,7 +81,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
           serverIDs.add(v);
           eventBusSnapshotCache.put(path, serverIDs);
         }
-        Future<Void> future = Future.future();
+        Promise<Void> future = Promise.promise();
         try {
           curator.sync().inBackground((syncClient, syncEvent) -> {
             if (syncEvent.getType() == CuratorEventType.SYNC) {
@@ -97,7 +97,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
         } catch (Exception ex) {
           vertx.runOnContext(aVoid -> future.fail(ex));
         }
-        return future;
+        return future.future();
       })
       .setHandler(completionHandler);
   }
@@ -109,7 +109,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
       .compose(aVoid -> {
         final String keyPath = keyPath(k);
         ChoosableSet<V> entries = cache.get(keyPath);
-        Future<ChoosableIterable<V>> future = Future.future();
+        Promise<ChoosableIterable<V>> future = Promise.promise();
         if (entries != null && !entries.isEmpty()) {
           future.complete(entries);
         } else {
@@ -138,7 +138,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
             ctx.runOnContext(v -> future.fail(ex));
           }
         }
-        return future;
+        return future.future();
       })
       .setHandler(ar -> ctx.runOnContext(v -> asyncResultHandler.handle(ar)));
   }
@@ -155,7 +155,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
 
   private Future<Boolean> remove(String keyPath, V v, String fullPath) {
     return checkExists(fullPath).compose(checkResult -> {
-      Future<Boolean> future = Future.future();
+      Promise<Boolean> future = Promise.promise();
       if (checkResult) {
         Optional.ofNullable(treeCache.getCurrentData(fullPath))
           .ifPresent(childData -> delete(fullPath, null).setHandler(deleteResult -> {
@@ -171,7 +171,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
       } else {
         future.complete(false);
       }
-      return future;
+      return future.future();
     });
   }
 
@@ -204,22 +204,22 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
       });
       //
       CompositeFuture.all(futures).compose(compositeFuture -> {
-        Future<Void> future = Future.future();
+        Promise<Void> future = Promise.promise();
         future.complete();
-        return future;
+        return future.future();
       }).setHandler(completionHandler);
     });
   }
 
   private Future<Void> restoreSnapshotCache() {
-    Future<Void> futureResult = Future.future();
+    Promise<Void> futureResult = Promise.promise();
     List<Future> allFuture = eventBusSnapshotCache.entrySet().stream().map(entry -> {
       String path = entry.getKey().substring(mapPath.length() + 1).split("/", 2)[0];
       ChoosableSet<V> values = entry.getValue();
       List<Future> futures = values.getIds().stream().map(value -> {
-        Future<Void> future = Future.future();
+        Promise<Void> future = Promise.promise();
         add((K) path, value, future);
-        return future;
+        return future.future();
       }).collect(Collectors.toList());
       return futures;
     }).flatMap(Collection::stream).collect(Collectors.toList());
@@ -231,7 +231,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
         futureResult.complete();
       }
     });
-    return futureResult;
+    return futureResult.future();
   }
 
   private class Listener implements TreeCacheListener {
