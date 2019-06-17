@@ -59,7 +59,7 @@ public class ConsumerRoundRobinTest extends VertxTestBase {
     AtomicInteger counter = new AtomicInteger(0);
     Set<Integer> results = new HashSet<>();
     Vertx vertx = vertices[0];
-    vertx.setPeriodic(500, aLong -> vertx.eventBus().send(MESSAGE_ADDRESS, "Hi", message -> {
+    vertx.setPeriodic(500, aLong -> vertx.eventBus().request(MESSAGE_ADDRESS, "Hi", message -> {
       if (message.failed()) {
         fail(message.cause());
       } else {
