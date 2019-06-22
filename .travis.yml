@@ -21,6 +21,7 @@ jobs:
       jdk: openjdk11
     - stage: deploy
       name: "Deploy to Sonatype's snapshots repository"
+      jdk: openjdk8
       if: type != pull_request
       script: bash .travis.deploy.artifacts.sh
 notifications:
