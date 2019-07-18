@@ -18,6 +18,7 @@ package io.vertx.spi.cluster.zookeeper.impl;
 import com.google.common.collect.Maps;
 import io.vertx.core.VertxException;
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
@@ -25,6 +26,8 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +51,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   @Override
   public boolean isEmpty() {
     try {
+      syncKeyPath(mapPath);
       return curator.getChildren().forPath(mapPath).isEmpty();
     } catch (Exception e) {
       throw new VertxException(e);
@@ -57,7 +61,9 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   @Override
   public boolean containsKey(Object key) {
     try {
-      return curator.checkExists().forPath(keyPath((K) key)) != null;
+      String keyPath = keyPath((K) key);
+      syncKeyPath(keyPath);
+      return curator.checkExists().forPath(keyPath) != null;
     } catch (Exception e) {
       throw new VertxException(e);
     }
@@ -66,6 +72,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   @Override
   public boolean containsValue(Object value) {
     try {
+      syncKeyPath(mapPath);
       return curator.getChildren().forPath(mapPath).stream().anyMatch(k -> {
         try {
           byte[] bytes = curator.getData().forPath(keyPath((K) k));
@@ -84,6 +91,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   public V get(Object key) {
     try {
       String keyPath = keyPath((K) key);
+      syncKeyPath(keyPath);
       if (null == curator.checkExists().forPath(keyPath)) {
         return null;
       } else {
@@ -144,6 +152,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   @Override
   public Set<K> keySet() {
     try {
+      syncKeyPath(mapPath);
       return curator.getChildren().forPath(mapPath).stream().map(k -> {
         try {
           KeyValue<K, V> keyValue = asObject(curator.getData().forPath(keyPath((K) k)));
@@ -160,18 +169,36 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   @Override
   public Collection<V> values() {
     try {
+      syncKeyPath(mapPath);
       return curator.getChildren().forPath(mapPath).stream()
-          .map(k -> {
-                try {
-                  KeyValue<K, V> keyValue = asObject(curator.getData().forPath(keyPath((K) k)));
-                  return keyValue.getValue();
-                } catch (Exception ex) {
-                  throw new VertxException(ex);
-                }
-              }
-          ).collect(Collectors.toSet());
+        .map(k -> {
+            try {
+              KeyValue<K, V> keyValue = asObject(curator.getData().forPath(keyPath((K) k)));
+              return keyValue.getValue();
+            } catch (Exception ex) {
+              throw new VertxException(ex);
+            }
+          }
+        ).collect(Collectors.toSet());
     } catch (Exception ex) {
       throw new VertxException(ex);
+    }
+  }
+
+  private void syncKeyPath(String path) {
+    //sync always run in background, so we have to using latch to wait callback.
+    CountDownLatch latch = new CountDownLatch(1);
+    try {
+      curator.sync().inBackground((client, event) -> {
+        if (event.getPath().equals(path) && event.getType() == CuratorEventType.SYNC) {
+          latch.countDown();
+        }
+      }).forPath(path);
+      latch.await(3L, TimeUnit.SECONDS);
+    } catch (Exception e) {
+      if (!(e instanceof KeeperException.NodeExistsException)) {
+        throw new VertxException(e);
+      }
     }
   }
 
