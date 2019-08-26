@@ -9,11 +9,11 @@
   </parent>
 
   <artifactId>vertx-zookeeper</artifactId>
-  <version>4.0.0-SNAPSHOT</version>
+  <version>4.0.0-milestone2</version>
   <name>Vert.x Zookeeper Cluster Manager</name>
 
   <properties>
-    <stack.version>4.0.0-SNAPSHOT</stack.version>
+    <stack.version>4.0.0-milestone2</stack.version>
     <curator.version>2.12.0</curator.version>
     <junit.version>4.12</junit.version>
     <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
