@@ -16,6 +16,7 @@
 package io.vertx.spi.cluster.zookeeper;
 
 import io.vertx.core.AsyncResult;
+import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
@@ -446,31 +447,46 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     }
 
     @Override
-    public void get(Handler<AsyncResult<Long>> resultHandler) {
-      Objects.requireNonNull(resultHandler);
-      vertx.executeBlocking(future -> {
+    public Future<Long> get() {
+      return vertx.executeBlocking(future -> {
         try {
           future.complete(atomicLong.get().preValue());
         } catch (Exception e) {
           future.fail(new VertxException(e));
         }
-      }, resultHandler);
+      });
+    }
+
+    @Override
+    public void get(Handler<AsyncResult<Long>> resultHandler) {
+      Objects.requireNonNull(resultHandler);
+      get().setHandler(resultHandler);
+    }
+
+    @Override
+    public Future<Long> incrementAndGet() {
+      return increment(true);
     }
 
     @Override
     public void incrementAndGet(Handler<AsyncResult<Long>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      increment(true, resultHandler);
+      incrementAndGet().setHandler(resultHandler);
+    }
+
+    @Override
+    public Future<Long> getAndIncrement() {
+      return increment(false);
     }
 
     @Override
     public void getAndIncrement(Handler<AsyncResult<Long>> resultHandler) {
-      increment(false, resultHandler);
+      Objects.requireNonNull(resultHandler);
+      getAndIncrement().setHandler(resultHandler);
     }
 
-    private void increment(boolean post, Handler<AsyncResult<Long>> resultHandler) {
-      Objects.requireNonNull(resultHandler);
-      vertx.executeBlocking(future -> {
+    private Future<Long> increment(boolean post) {
+      return vertx.executeBlocking(future -> {
         try {
           long returnValue = 0;
           if (atomicLong.get().succeeded()) returnValue = atomicLong.get().preValue();
@@ -482,13 +498,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         } catch (Exception e) {
           future.fail(new VertxException(e));
         }
-      }, resultHandler);
+      });
     }
 
     @Override
-    public void decrementAndGet(Handler<AsyncResult<Long>> resultHandler) {
-      Objects.requireNonNull(resultHandler);
-      vertx.executeBlocking(future -> {
+    public Future<Long> decrementAndGet() {
+      return vertx.executeBlocking(future -> {
         try {
           if (atomicLong.decrement().succeeded()) {
             future.complete(atomicLong.get().postValue());
@@ -498,22 +513,39 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         } catch (Exception e) {
           future.fail(new VertxException(e));
         }
-      }, resultHandler);
+      });
+    }
+
+    @Override
+    public void decrementAndGet(Handler<AsyncResult<Long>> resultHandler) {
+      Objects.requireNonNull(resultHandler);
+      decrementAndGet().setHandler(resultHandler);
+    }
+
+    @Override
+    public Future<Long> addAndGet(long value) {
+      return add(value, true);
     }
 
     @Override
     public void addAndGet(long value, Handler<AsyncResult<Long>> resultHandler) {
-      add(value, true, resultHandler);
+      Objects.requireNonNull(resultHandler);
+      addAndGet(value).setHandler(resultHandler);
+    }
+
+    @Override
+    public Future<Long> getAndAdd(long value) {
+      return add(value, false);
     }
 
     @Override
     public void getAndAdd(long value, Handler<AsyncResult<Long>> resultHandler) {
-      add(value, false, resultHandler);
+      Objects.requireNonNull(resultHandler);
+      getAndAdd(value).setHandler(resultHandler);
     }
 
-    private void add(long value, boolean post, Handler<AsyncResult<Long>> resultHandler) {
-      Objects.requireNonNull(resultHandler);
-      vertx.executeBlocking(future -> {
+    private Future<Long> add(long value, boolean post) {
+      return vertx.executeBlocking(future -> {
         try {
           long returnValue = 0;
           if (atomicLong.get().succeeded()) returnValue = atomicLong.get().preValue();
@@ -525,20 +557,25 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         } catch (Exception e) {
           future.fail(new VertxException(e));
         }
-      }, resultHandler);
+      });
     }
 
     @Override
-    public void compareAndSet(long expected, long value, Handler<AsyncResult<Boolean>> resultHandler) {
-      Objects.requireNonNull(resultHandler);
-      vertx.executeBlocking(future -> {
+    public Future<Boolean> compareAndSet(long expected, long value) {
+      return vertx.executeBlocking(future -> {
         try {
           if (atomicLong.get().succeeded() && atomicLong.get().preValue() == 0) this.atomicLong.initialize(0L);
           future.complete(atomicLong.compareAndSet(expected, value).succeeded());
         } catch (Exception e) {
           future.fail(new VertxException(e));
         }
-      }, resultHandler);
+      });
+    }
+
+    @Override
+    public void compareAndSet(long expected, long value, Handler<AsyncResult<Boolean>> resultHandler) {
+      Objects.requireNonNull(resultHandler);
+      compareAndSet(expected, value).setHandler(resultHandler);
     }
   }
 
