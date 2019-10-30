@@ -74,7 +74,7 @@ public class AsyncMapTTLMonitor<K, V> {
           if (timerID > 0) vertx.cancelTimer(timerID);
         } else {
           long timerID = vertx.setTimer(body.getLong(TTL_KEY_BODY_TIMEOUT), aLong -> {
-              clusterManager.getLockWithTimeout(TTL_KEY_LOCK, TTL_KEY_GET_LOCK_TIMEOUT, lockAsyncResult -> {
+              clusterManager.getLockWithTimeout(TTL_KEY_LOCK, TTL_KEY_GET_LOCK_TIMEOUT).setHandler(lockAsyncResult -> {
                 ZKAsyncMap<K, V> zkAsyncMap = keyPathAndAsyncMap.get(keyPath);
                 if (lockAsyncResult.succeeded()) {
                   zkAsyncMap.checkExists(keyPath)

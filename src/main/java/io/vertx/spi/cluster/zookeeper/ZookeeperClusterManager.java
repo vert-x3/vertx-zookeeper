@@ -200,12 +200,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public <K, V> void getAsyncMap(String name, Handler<AsyncResult<AsyncMap<K, V>>> handler) {
+  public <K, V> Future<AsyncMap<K, V>> getAsyncMap(String name) {
     AsyncMapTTLMonitor<K, V> asyncMapTTLMonitor = AsyncMapTTLMonitor.getInstance(vertx, this);
-    vertx.executeBlocking(event -> {
+    return vertx.executeBlocking(event -> {
       AsyncMap zkAsyncMap = asyncMapCache.computeIfAbsent(name, key -> new ZKAsyncMap<>(vertx, curator, asyncMapTTLMonitor, name));
       event.complete(zkAsyncMap);
-    }, handler);
+    });
   }
 
   @Override
@@ -214,8 +214,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void getLockWithTimeout(String name, long timeout, Handler<AsyncResult<Lock>> resultHandler) {
-    vertx.executeBlocking(fut -> {
+  public Future<Lock> getLockWithTimeout(String name, long timeout) {
+    return vertx.executeBlocking(fut -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
         InterProcessSemaphoreMutex mutexLock = new InterProcessSemaphoreMutex(curator, ZK_PATH_LOCKS + name);
@@ -231,19 +231,19 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       } catch (Exception e) {
         throw new VertxException("get lock exception", e);
       }
-    }, false, resultHandler);
+    }, false);
   }
 
   @Override
-  public void getCounter(String name, Handler<AsyncResult<Counter>> resultHandler) {
-    vertx.executeBlocking(future -> {
+  public Future<Counter> getCounter(String name) {
+    return vertx.executeBlocking(future -> {
       try {
         Objects.requireNonNull(name);
         future.complete(new ZKCounter(name, retryPolicy));
       } catch (Exception e) {
         future.fail(new VertxException(e));
       }
-    }, resultHandler);
+    });
   }
 
   @Override
@@ -276,7 +276,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private void createThisNode() throws Exception {
     //clean ha node would be happened multi times with multi vertx node in startup, so we have a lock to avoid conflict.
-    this.getLockWithTimeout("__cluster_init_lock", 3000L, lockAsyncResult -> {
+    this.getLockWithTimeout("__cluster_init_lock", 3000L).setHandler(lockAsyncResult -> {
       if (lockAsyncResult.succeeded()) {
         try {
           //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
