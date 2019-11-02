@@ -15,14 +15,12 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.AsyncResult;
 import io.vertx.core.CompositeFuture;
-import io.vertx.core.Context;
 import io.vertx.core.Future;
-import io.vertx.core.Handler;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
+import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.AsyncMap;
 import org.apache.curator.framework.CuratorFramework;
@@ -63,8 +61,8 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   }
 
   @Override
-  public void get(K k, Handler<AsyncResult<V>> asyncResultHandler) {
-    assertKeyIsNotNull(k)
+  public Future<V> get(K k) {
+    return assertKeyIsNotNull(k)
       .compose(aVoid -> checkExists(k))
       .compose(checkResult -> {
         Promise<V> promise = Promise.promise();
@@ -85,22 +83,21 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
           promise.complete();
         }
         return promise.future();
-      })
-      .setHandler(asyncResultHandler);
+      });
   }
 
   @Override
-  public void put(K k, V v, Handler<AsyncResult<Void>> completionHandler) {
-    put(k, v, Optional.empty(), completionHandler);
+  public Future<Void> put(K k, V v) {
+    return put(k, v, Optional.empty());
   }
 
   @Override
-  public void put(K k, V v, long timeout, Handler<AsyncResult<Void>> completionHandler) {
-    put(k, v, Optional.of(timeout), completionHandler);
+  public Future<Void> put(K k, V v, long ttl) {
+    return put(k, v, Optional.of(ttl));
   }
 
-  private void put(K k, V v, Optional<Long> timeoutOptional, Handler<AsyncResult<Void>> completionHandler) {
-    assertKeyAndValueAreNotNull(k, v)
+  private Future<Void> put(K k, V v, Optional<Long> timeoutOptional) {
+    return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> checkExists(k))
       .compose(checkResult -> checkResult ? setData(k, v) : create(k, v))
       .compose(aVoid -> {
@@ -113,22 +110,21 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         vertx.eventBus().publish(TTL_KEY_HANDLER_ADDRESS, body);
 
         return Future.<Void>succeededFuture();
-      })
-      .setHandler(completionHandler);
+      });
   }
 
   @Override
-  public void putIfAbsent(K k, V v, Handler<AsyncResult<V>> completionHandler) {
-    putIfAbsent(k, v, Optional.empty(), completionHandler);
+  public Future<V> putIfAbsent(K k, V v) {
+    return putIfAbsent(k, v, Optional.empty());
   }
 
   @Override
-  public void putIfAbsent(K k, V v, long timeout, Handler<AsyncResult<V>> completionHandler) {
-    putIfAbsent(k, v, Optional.of(timeout), completionHandler);
+  public Future<V> putIfAbsent(K k, V v, long ttl) {
+    return putIfAbsent(k, v, Optional.of(ttl));
   }
 
-  private void putIfAbsent(K k, V v, Optional<Long> timeoutOptional, Handler<AsyncResult<V>> completionHandler) {
-    assertKeyAndValueAreNotNull(k, v)
+  private Future<V> putIfAbsent(K k, V v, Optional<Long> timeoutOptional) {
+    return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> {
         Promise<V> innerPromise = Promise.promise();
         vertx.executeBlocking(future -> {
@@ -161,13 +157,12 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         //publish a ttl message to all nodes.
         vertx.eventBus().publish(TTL_KEY_HANDLER_ADDRESS, body);
         return Future.succeededFuture(value);
-      })
-      .setHandler(completionHandler);
+      });
   }
 
   @Override
-  public void remove(K k, Handler<AsyncResult<V>> asyncResultHandler) {
-    assertKeyIsNotNull(k).compose(aVoid -> {
+  public Future<V> remove(K k) {
+    return assertKeyIsNotNull(k).compose(aVoid -> {
       Promise<V> promise = Promise.promise();
       get(k, promise);
       return promise.future();
@@ -179,12 +174,12 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         promise.complete();
       }
       return promise.future();
-    }).setHandler(asyncResultHandler);
+    });
   }
 
   @Override
-  public void removeIfPresent(K k, V v, Handler<AsyncResult<Boolean>> resultHandler) {
-    assertKeyAndValueAreNotNull(k, v)
+  public Future<Boolean> removeIfPresent(K k, V v) {
+    return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> {
         Promise<V> promise = Promise.promise();
         get(k, promise);
@@ -201,12 +196,12 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
           promise.complete(false);
         }
         return promise.future();
-      }).setHandler(resultHandler);
+      });
   }
 
   @Override
-  public void replace(K k, V v, Handler<AsyncResult<V>> asyncResultHandler) {
-    assertKeyAndValueAreNotNull(k, v)
+  public Future<V> replace(K k, V v) {
+    return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> {
         Promise<V> innerPromise = Promise.promise();
         vertx.executeBlocking(future -> {
@@ -234,13 +229,12 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
           }
         }, false, innerPromise);
         return innerPromise.future();
-      })
-      .setHandler(asyncResultHandler);
+      });
   }
 
   @Override
-  public void replaceIfPresent(K k, V oldValue, V newValue, Handler<AsyncResult<Boolean>> resultHandler) {
-    assertKeyIsNotNull(k)
+  public Future<Boolean> replaceIfPresent(K k, V oldValue, V newValue) {
+    return assertKeyIsNotNull(k)
       .compose(aVoid -> assertValueIsNotNull(oldValue))
       .compose(aVoid -> assertValueIsNotNull(newValue))
       .compose(aVoid -> {
@@ -269,35 +263,31 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
           }
         }, false, innerPromise);
         return innerPromise.future();
-      })
-      .setHandler(resultHandler);
+      });
   }
 
   @Override
-  public void clear(Handler<AsyncResult<Void>> resultHandler) {
+  public Future<Void> clear() {
     //just remove parent node
-    delete(mapPath, null).setHandler(result -> {
-      if (result.succeeded()) {
-        resultHandler.handle(Future.succeededFuture());
-      } else {
-        resultHandler.handle(Future.failedFuture(result.cause()));
-      }
-    });
+    return delete(mapPath, null).mapEmpty();
   }
 
   @Override
-  public void size(Handler<AsyncResult<Integer>> resultHandler) {
+  public Future<Integer> size() {
+    Promise<Integer> promise = ((VertxInternal)vertx).getOrCreateContext().promise();
     try {
       curator.getChildren().inBackground((client, event) ->
-        vertx.runOnContext(aVoid -> resultHandler.handle(Future.succeededFuture(event.getChildren().size()))))
+        promise.tryComplete(event.getChildren().size()))
         .forPath(mapPath);
     } catch (Exception e) {
-      resultHandler.handle(Future.failedFuture(e));
+      promise.tryFail(e);
     }
+    return promise.future();
   }
 
-  public void keys(Handler<AsyncResult<Set<K>>> resultHandler) {
-    Context context = vertx.getOrCreateContext();
+  @Override
+  public Future<Set<K>> keys() {
+    Promise<Set<K>> promise = ((VertxInternal)vertx).getOrCreateContext().promise();
     try {
       curator.getChildren().inBackground((client, event) -> {
         Set<K> keys = new HashSet<>();
@@ -307,23 +297,24 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
           try {
             key = asObject(binaryKey);
           } catch (Exception e) {
-            context.runOnContext(v -> resultHandler.handle(Future.failedFuture(e)));
+            promise.tryFail(e);
             return;
           }
           keys.add(key);
         }
-        context.runOnContext(v -> resultHandler.handle(Future.succeededFuture(keys)));
+        promise.tryComplete(keys);
       }).forPath(mapPath);
     } catch (Exception e) {
-      resultHandler.handle(Future.failedFuture(e));
+      promise.tryFail(e);
     }
+    return promise.future();
   }
 
   @Override
-  public void values(Handler<AsyncResult<List<V>>> resultHandler) {
-    Promise<Set<K>> keysPromise = Promise.promise();
+  public Future<List<V>> values() {
+    Promise<Set<K>> keysPromise = ((VertxInternal)vertx).getOrCreateContext().promise();
     keys(keysPromise);
-    keysPromise.future().compose(keys -> {
+    return keysPromise.future().compose(keys -> {
       List<Future> futures = new ArrayList<>(keys.size());
       for (K k : keys) {
         Promise valuePromise = Promise.promise();
@@ -337,14 +328,14 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         }
         return values;
       });
-    }).setHandler(resultHandler);
+    });
   }
 
   @Override
-  public void entries(Handler<AsyncResult<Map<K, V>>> resultHandler) {
-    Promise<Set<K>> keysPromise = Promise.promise();
+  public Future<Map<K, V>> entries() {
+    Promise<Set<K>> keysPromise = ((VertxInternal)vertx).getOrCreateContext().promise();
     keys(keysPromise);
-    keysPromise.future().map(ArrayList::new).compose(keys -> {
+    return keysPromise.future().map(ArrayList::new).compose(keys -> {
       List<Future> futures = new ArrayList<>(keys.size());
       for (K k : keys) {
         Promise valuePromise = Promise.promise();
@@ -358,7 +349,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         }
         return map;
       });
-    }).setHandler(resultHandler);
+    });
   }
 
   @Override
