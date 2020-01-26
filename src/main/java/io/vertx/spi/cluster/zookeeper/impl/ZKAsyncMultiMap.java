@@ -72,7 +72,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
     String path = valuePath(k, v);
     assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> checkExists(path))
-      .compose(checkResult -> checkResult ? setData(path, v) : create(path, v))
+      .compose(checkResult -> checkResult ? setData(path, v) : create(path, v, Optional.empty()))
       .compose(stat -> {
         //add to snapshot cache if path contains eventbus address
         if (path.contains(EVENTBUS_PATH)) {

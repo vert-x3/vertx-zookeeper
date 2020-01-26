@@ -29,7 +29,6 @@ import io.vertx.core.shareddata.Lock;
 import io.vertx.core.spi.cluster.AsyncMultiMap;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.core.spi.cluster.NodeListener;
-import io.vertx.spi.cluster.zookeeper.impl.AsyncMapTTLMonitor;
 import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMap;
 import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMultiMap;
 import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
@@ -201,9 +200,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public <K, V> Future<AsyncMap<K, V>> getAsyncMap(String name) {
-    AsyncMapTTLMonitor<K, V> asyncMapTTLMonitor = AsyncMapTTLMonitor.getInstance(vertx, this);
     return vertx.executeBlocking(event -> {
-      AsyncMap zkAsyncMap = asyncMapCache.computeIfAbsent(name, key -> new ZKAsyncMap<>(vertx, curator, asyncMapTTLMonitor, name));
+      AsyncMap zkAsyncMap = asyncMapCache.computeIfAbsent(name, key -> new ZKAsyncMap<>(vertx, curator, name));
       event.complete(zkAsyncMap);
     });
   }
@@ -376,7 +374,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
                 }
               }
             }).forPath(ZK_PATH_CLUSTER_NODE + nodeID);
-            AsyncMapTTLMonitor.getInstance(vertx, this).stop();
           } catch (Exception e) {
             log.error(e);
             future.fail(e);

@@ -39,21 +39,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static io.vertx.spi.cluster.zookeeper.impl.AsyncMapTTLMonitor.*;
-
 /**
  * Created by Stream.Liu
  */
 public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   private final PathChildrenCache curatorCache;
-  private AsyncMapTTLMonitor<K, V> asyncMapTTLMonitor;
 
-  public ZKAsyncMap(Vertx vertx, CuratorFramework curator, AsyncMapTTLMonitor<K,V> asyncMapTTLMonitor, String mapName) {
+  public ZKAsyncMap(Vertx vertx, CuratorFramework curator, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MAP, mapName);
     this.curatorCache = new PathChildrenCache(curator, mapPath, true);
     try {
-      this.asyncMapTTLMonitor = asyncMapTTLMonitor;
       curatorCache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
     } catch (Exception e) {
       throw new VertxException(e);
@@ -99,18 +95,8 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   private Future<Void> put(K k, V v, Optional<Long> timeoutOptional) {
     return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> checkExists(k))
-      .compose(checkResult -> checkResult ? setData(k, v) : create(k, v))
-      .compose(aVoid -> {
-        JsonObject body = new JsonObject().put(TTL_KEY_BODY_KEY_PATH, keyPath(k));
-        if (timeoutOptional.isPresent()) {
-          asyncMapTTLMonitor.addAsyncMapWithPath(keyPath(k), this);
-          body.put(TTL_KEY_BODY_TIMEOUT, timeoutOptional.get());
-        } else body.put(TTL_KEY_IS_CANCEL, true);
-        //publish a ttl message to all nodes.
-        vertx.eventBus().publish(TTL_KEY_HANDLER_ADDRESS, body);
-
-        return Future.<Void>succeededFuture();
-      });
+      .compose(checkResult -> checkResult ? setData(k, v) : create(k, v, timeoutOptional))
+      .compose(stat -> Future.succeededFuture());
   }
 
   @Override
@@ -125,37 +111,15 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   private Future<V> putIfAbsent(K k, V v, Optional<Long> timeoutOptional) {
     return assertKeyAndValueAreNotNull(k, v)
-      .compose(aVoid -> {
-        Promise<V> innerPromise = Promise.promise();
-        vertx.executeBlocking(future -> {
-          long startTime = Instant.now().toEpochMilli();
-          int retries = 0;
-
-          for (; ; ) {
-            try {
-              Stat stat = new Stat();
-              String path = keyPath(k);
-              V currentValue = getData(stat, path);
-              if (compareAndSet(startTime, retries++, stat, path, currentValue, v)) {
-                future.complete(currentValue);
-                return;
-              }
-            } catch (Exception e) {
-              future.fail(e);
-              return;
-            }
-          }
-        }, false, innerPromise);
-        return innerPromise.future();
-      })
+      .compose(aVoid -> get(k))
       .compose(value -> {
-        JsonObject body = new JsonObject().put(TTL_KEY_BODY_KEY_PATH, keyPath(k));
-        if (timeoutOptional.isPresent()) {
-          asyncMapTTLMonitor.addAsyncMapWithPath(keyPath(k), this);
-          body.put(TTL_KEY_BODY_TIMEOUT, timeoutOptional.get());
-        } else body.put(TTL_KEY_IS_CANCEL, true);
-        //publish a ttl message to all nodes.
-        vertx.eventBus().publish(TTL_KEY_HANDLER_ADDRESS, body);
+        if (value == null) {
+          if (timeoutOptional.isPresent()) {
+            put(k, v, timeoutOptional);
+          } else {
+            put(k, v);
+          }
+        }
         return Future.succeededFuture(value);
       });
   }
