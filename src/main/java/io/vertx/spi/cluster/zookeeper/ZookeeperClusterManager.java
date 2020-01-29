@@ -45,18 +45,14 @@ import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -93,6 +89,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
   private static final String ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH = "/cluster/nodes";
   private static final String VERTX_HA_NODE = "__vertx.haInfo";
+
+  private ExecutorService lockReleaseExec;
 
   public ZookeeperClusterManager() {
     String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
@@ -304,6 +302,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       if (!active) {
         active = true;
 
+        lockReleaseExec = Executors.newCachedThreadPool(r -> new Thread(r, "vertx-zookeeper-service-release-lock-thread"));
+
         //The curator instance has been passed using the constructor.
         if (customCuratorCluster) {
           try {
@@ -362,6 +362,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       synchronized (ZookeeperClusterManager.this) {
         if (active) {
           active = false;
+          lockReleaseExec.shutdown();
           try {
             curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
               if (event.getType() == CuratorEventType.DELETE) {
@@ -559,14 +560,13 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
     @Override
     public void release() {
-      vertx.executeBlocking(future -> {
+      lockReleaseExec.execute(() -> {
         try {
           lock.release();
         } catch (Exception e) {
           log.error(e);
         }
-        future.complete();
-      }, false, null);
+      });
     }
   }
 
