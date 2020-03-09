@@ -74,12 +74,12 @@ public class AsyncMapTTLMonitor<K, V> {
           if (timerID > 0) vertx.cancelTimer(timerID);
         } else {
           long timerID = vertx.setTimer(body.getLong(TTL_KEY_BODY_TIMEOUT), aLong -> {
-              clusterManager.getLockWithTimeout(TTL_KEY_LOCK, TTL_KEY_GET_LOCK_TIMEOUT).setHandler(lockAsyncResult -> {
+              clusterManager.getLockWithTimeout(TTL_KEY_LOCK, TTL_KEY_GET_LOCK_TIMEOUT).onComplete(lockAsyncResult -> {
                 ZKAsyncMap<K, V> zkAsyncMap = keyPathAndAsyncMap.get(keyPath);
                 if (lockAsyncResult.succeeded()) {
                   zkAsyncMap.checkExists(keyPath)
                     .compose(checkResult -> checkResult ? zkAsyncMap.delete(keyPath, null) : Future.succeededFuture())
-                    .setHandler(deleteResult -> {
+                    .onComplete(deleteResult -> {
                       if (deleteResult.succeeded()) {
                         lockAsyncResult.result().release();
                         logger.debug(String.format("The key %s have arrived time, and have been deleted.", keyPath));

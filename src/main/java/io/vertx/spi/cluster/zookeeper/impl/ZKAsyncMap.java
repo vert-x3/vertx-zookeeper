@@ -188,7 +188,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       .compose(value -> {
         Promise<Boolean> promise = Promise.promise();
         if (value.equals(v)) {
-          delete(k, v).setHandler(deleteResult -> {
+          delete(k, v).onComplete(deleteResult -> {
             if (deleteResult.succeeded()) promise.complete(true);
             else promise.fail(deleteResult.cause());
           });

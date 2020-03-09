@@ -270,7 +270,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private void createThisNode() throws Exception {
     //clean ha node would be happened multi times with multi vertx node in startup, so we have a lock to avoid conflict.
-    this.getLockWithTimeout("__cluster_init_lock", 3000L).setHandler(lockAsyncResult -> {
+    this.getLockWithTimeout("__cluster_init_lock", onComplete).setHandler(lockAsyncResult -> {
       if (lockAsyncResult.succeeded()) {
         try {
           //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
@@ -457,7 +457,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     @Override
     public void get(Handler<AsyncResult<Long>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      get().setHandler(resultHandler);
+      get().onComplete(resultHandler);
     }
 
     @Override
@@ -468,7 +468,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     @Override
     public void incrementAndGet(Handler<AsyncResult<Long>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      incrementAndGet().setHandler(resultHandler);
+      incrementAndGet().onComplete(resultHandler);
     }
 
     @Override
@@ -479,7 +479,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     @Override
     public void getAndIncrement(Handler<AsyncResult<Long>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      getAndIncrement().setHandler(resultHandler);
+      getAndIncrement().onComplete(resultHandler);
     }
 
     private Future<Long> increment(boolean post) {
@@ -516,7 +516,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     @Override
     public void decrementAndGet(Handler<AsyncResult<Long>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      decrementAndGet().setHandler(resultHandler);
+      decrementAndGet().onComplete(resultHandler);
     }
 
     @Override
@@ -527,7 +527,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     @Override
     public void addAndGet(long value, Handler<AsyncResult<Long>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      addAndGet(value).setHandler(resultHandler);
+      addAndGet(value).onComplete(resultHandler);
     }
 
     @Override
@@ -538,7 +538,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     @Override
     public void getAndAdd(long value, Handler<AsyncResult<Long>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      getAndAdd(value).setHandler(resultHandler);
+      getAndAdd(value).onComplete(resultHandler);
     }
 
     private Future<Long> add(long value, boolean post) {
@@ -572,7 +572,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     @Override
     public void compareAndSet(long expected, long value, Handler<AsyncResult<Boolean>> resultHandler) {
       Objects.requireNonNull(resultHandler);
-      compareAndSet(expected, value).setHandler(resultHandler);
+      compareAndSet(expected, value).onComplete(resultHandler);
     }
   }
 
