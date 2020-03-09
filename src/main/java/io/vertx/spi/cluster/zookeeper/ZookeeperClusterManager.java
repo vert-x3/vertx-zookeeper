@@ -270,7 +270,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private void createThisNode() throws Exception {
     //clean ha node would be happened multi times with multi vertx node in startup, so we have a lock to avoid conflict.
-    this.getLockWithTimeout("__cluster_init_lock", onComplete).setHandler(lockAsyncResult -> {
+    long onComplete;
+    this.getLockWithTimeout("__cluster_init_lock", 3000L).onComplete(lockAsyncResult -> {
       if (lockAsyncResult.succeeded()) {
         try {
           //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
