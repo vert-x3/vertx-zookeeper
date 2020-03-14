@@ -14,7 +14,8 @@
 
   <properties>
     <stack.version>4.0.0-SNAPSHOT</stack.version>
-    <curator.version>2.12.0</curator.version>
+    <curator.version>4.3.0</curator.version>
+    <curator.test.version>2.12.0</curator.test.version>
     <junit.version>4.12</junit.version>
     <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
   </properties>
@@ -132,7 +133,7 @@
     <dependency>
       <groupId>org.apache.curator</groupId>
       <artifactId>curator-test</artifactId>
-      <version>${curator.version}</version>
+      <version>${curator.test.version}</version>
       <scope>test</scope>
       <exclusions>
         <exclusion>
