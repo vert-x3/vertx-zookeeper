@@ -15,7 +15,6 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import com.google.common.collect.Maps;
 import io.vertx.core.VertxException;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.zookeeper.CreateMode;
@@ -23,6 +22,7 @@ import org.apache.zookeeper.KeeperException;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -179,7 +179,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   public Set<Entry<K, V>> entrySet() {
     return keySet().stream().map(k -> {
       V v = get(k);
-      return Maps.immutableEntry(k, v);
+      return new HashMap.SimpleImmutableEntry<>(k, v);
     }).collect(Collectors.toSet());
   }
 

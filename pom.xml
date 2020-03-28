@@ -14,7 +14,7 @@
 
   <properties>
     <stack.version>3.9.0-SNAPSHOT</stack.version>
-    <curator.version>2.12.0</curator.version>
+    <curator.version>2.13.0</curator.version>
     <junit.version>4.12</junit.version>
     <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
   </properties>
@@ -68,10 +68,6 @@
           <groupId>log4j</groupId>
           <artifactId>log4j</artifactId>
         </exclusion>
-        <exclusion>
-          <groupId>com.google.guava</groupId>
-          <artifactId>guava</artifactId>
-        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -99,13 +95,6 @@
       <version>${curator.version}</version>
     </dependency>
 
-    <!-- Curator requires these dependencies: declare this dependency to force this module to use this one. These are the versions used by vert.x -->
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>25.1-jre</version>
-    </dependency>
-
     <!-- ZK requires these dependencies: declare this dependency to force this module to use this one. These are the versions used by vert.x -->
     <dependency>
       <groupId>org.slf4j</groupId>
@@ -121,6 +110,14 @@
       <groupId>log4j</groupId>
       <artifactId>log4j</artifactId>
       <version>1.2.16</version>
+    </dependency>
+
+    <!-- Curator-test requires these dependencies: declare this dependency to force this module to use this one. These are the versions used by vert.x -->
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>25.1-jre</version>
+      <scope>test</scope>
     </dependency>
 
     <dependency>
