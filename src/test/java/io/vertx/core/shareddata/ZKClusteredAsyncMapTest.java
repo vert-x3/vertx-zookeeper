@@ -19,7 +19,6 @@ package io.vertx.core.shareddata;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
-import org.junit.Ignore;
 import org.junit.Test;
 
 /**
@@ -84,7 +83,6 @@ public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
 
   @Test
   @Override
-  @Ignore("This CM removes the binding even if a new entry is added without ttl")
   public void testMapPutTtlThenPut() {
     getVertx().sharedData().getAsyncMap("foo", onSuccess(map -> {
       map.put("pipo", "molo", 150, onSuccess(vd -> {

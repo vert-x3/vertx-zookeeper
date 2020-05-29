@@ -33,6 +33,7 @@ import org.apache.zookeeper.data.Stat;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -216,18 +217,23 @@ abstract class ZKMap<K, V> {
     return future.future();
   }
 
-  Future<Stat> create(K k, V v) {
-    return create(keyPath(k), v);
+  Future<Stat> create(K k, V v, Optional<Long> timeToLive) {
+    return create(keyPath(k), v, timeToLive);
   }
 
-  Future<Stat> create(String path, V v) {
+  Future<Stat> create(String path, V v, Optional<Long> timeToLive) {
     Promise<Stat> future = Promise.promise();
     try {
       //there are two type of node - ephemeral and persistent.
       //if path is 'asyncMultiMap/subs/' which save the data of eventbus address and serverID we could using ephemeral,
       //since the lifecycle of this path as long as this verticle.
       CreateMode nodeMode = path.contains(EVENTBUS_PATH) ? CreateMode.EPHEMERAL : CreateMode.PERSISTENT;
-      curator.create().creatingParentsIfNeeded().withMode(nodeMode).inBackground((cl, el) -> {
+      //as zk 3.5.x provide ttl node mode, we should consider it.
+      nodeMode = timeToLive.isPresent() ? CreateMode.PERSISTENT_WITH_TTL : nodeMode;
+      ProtectACLCreateModeStatPathAndBytesable<String> pathAndBytesable = timeToLive.isPresent()
+        ? curator.create().withTtl(timeToLive.get()).creatingParentsIfNeeded()
+        : curator.create().creatingParentsIfNeeded();
+      pathAndBytesable.withMode(nodeMode).inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
           vertx.runOnContext(event -> future.complete(el.getStat()));
         }
