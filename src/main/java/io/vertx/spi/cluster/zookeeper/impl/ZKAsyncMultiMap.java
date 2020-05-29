@@ -36,9 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.INITIALIZED;
-import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_ADDED;
-import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.NODE_REMOVED;
+import static org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type.*;
 
 /**
  * Created by Stream.Liu
@@ -72,7 +70,7 @@ public class ZKAsyncMultiMap<K, V> extends ZKMap<K, V> implements AsyncMultiMap<
     String path = valuePath(k, v);
     assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> checkExists(path))
-      .compose(checkResult -> checkResult ? setData(path, v) : create(path, v))
+      .compose(checkResult -> checkResult ? setData(path, v) : create(path, v, Optional.empty()))
       .compose(stat -> {
         //add to snapshot cache if path contains eventbus address
         if (path.contains(EVENTBUS_PATH)) {
