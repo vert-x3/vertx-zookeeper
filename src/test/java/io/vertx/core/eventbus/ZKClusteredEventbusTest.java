@@ -45,8 +45,9 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     vertices = new Vertx[numNodes];
     for (int i = 0; i < numNodes; i++) {
       int index = i;
-      clusteredVertx(options.setClusterHost("localhost").setClusterPort(0)
-        .setClusterManager(getClusterManager()), ar -> {
+      options.setClusterManager(getClusterManager())
+        .getEventBusOptions().setHost("localhost").setPort(0);
+      clusteredVertx(options, ar -> {
         try {
           if (ar.failed()) {
             ar.cause().printStackTrace();
