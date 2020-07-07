@@ -139,7 +139,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       })
       .compose(value -> {
         Promise<Boolean> promise = Promise.promise();
-        if (value.equals(v)) {
+        if (v.equals(value)) {
           delete(k, v).onComplete(deleteResult -> {
             if (deleteResult.succeeded()) promise.complete(true);
             else promise.fail(deleteResult.cause());
