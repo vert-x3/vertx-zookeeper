@@ -193,7 +193,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       })
       .compose(value -> {
         Future<Boolean> future = Future.future();
-        if (value.equals(v)) {
+        if (v.equals(value)) {
           delete(k, v).setHandler(deleteResult -> {
             if (deleteResult.succeeded()) future.complete(true);
             else future.fail(deleteResult.cause());
