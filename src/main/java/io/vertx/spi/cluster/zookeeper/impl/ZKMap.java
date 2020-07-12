@@ -32,6 +32,7 @@ import org.apache.zookeeper.data.Stat;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -48,10 +49,15 @@ abstract class ZKMap<K, V> {
   static final String ZK_PATH_ASYNC_MULTI_MAP = "asyncMultiMap";
   static final String EVENTBUS_PATH = "/" + ZK_PATH_ASYNC_MULTI_MAP + "/__vertx.subs/";
   static final String ZK_PATH_SYNC_MAP = "syncMap";
+  static final Predicate<String> pathChecker = path -> {
+    if (path.contains("/")) throw new IllegalArgumentException("can not contain forward slash char in ZK node path");
+    return true;
+  } ;
 
   private RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
 
   ZKMap(CuratorFramework curator, Vertx vertx, String mapType, String mapName) {
+    pathChecker.test(mapName);
     this.curator = curator;
     this.vertx = vertx;
     this.mapName = mapName;
@@ -59,10 +65,12 @@ abstract class ZKMap<K, V> {
   }
 
   String keyPath(K k) {
+    pathChecker.test(k.toString());
     return mapPath + "/" + k.toString();
   }
 
   String valuePath(K k, Object v) {
+    pathChecker.test(v.toString());
     return keyPath(k) + "/" + v.toString();
   }
 
