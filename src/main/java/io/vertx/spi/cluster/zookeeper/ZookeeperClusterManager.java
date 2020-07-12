@@ -16,9 +16,8 @@
 
 package io.vertx.spi.cluster.zookeeper;
 
-import io.vertx.core.Promise;
-import io.vertx.core.Vertx;
-import io.vertx.core.VertxException;
+import io.vertx.core.*;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
@@ -27,10 +26,7 @@ import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.Counter;
 import io.vertx.core.shareddata.Lock;
 import io.vertx.core.spi.cluster.*;
-import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMap;
-import io.vertx.spi.cluster.zookeeper.impl.ZKCounter;
-import io.vertx.spi.cluster.zookeeper.impl.ZKLock;
-import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
+import io.vertx.spi.cluster.zookeeper.impl.*;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -42,16 +38,15 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException;
 
 import java.io.*;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -72,11 +67,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private volatile boolean joined;
 
   private String nodeId;
+  private NodeInfo nodeInfo;
   private CuratorFramework curator;
   private boolean customCuratorCluster;
   private RetryPolicy retryPolicy;
-  private Map<String, ZKLock> locks = new ConcurrentHashMap<>();
-  private Map<String, AsyncMap<?, ?>> asyncMapCache = new ConcurrentHashMap<>();
+  private SubsMapHelper subsMapHelper;
+  private final Map<String, NodeInfo> localNodeInfo = new ConcurrentHashMap<>();
+  private final Map<String, ZKLock> locks = new ConcurrentHashMap<>();
+  private final Map<String, AsyncMap<?, ?>> asyncMapCache = new ConcurrentHashMap<>();
 
   private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.json";
   private static final String CONFIG_FILE = "zookeeper.json";
@@ -86,9 +84,13 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
   private static final String ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH = "/cluster/nodes";
-  private static final String VERTX_HA_NODE = "__vertx.haInfo";
 
   private ExecutorService lockReleaseExec;
+
+  private Function<String, String> resolveNodeId = path -> {
+    String[] pathArr =  path.split("\\/");
+    return pathArr[pathArr.length - 1];
+  };
 
   public ZookeeperClusterManager() {
     String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
@@ -231,7 +233,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public List<String> getNodes() {
-    return clusterNodes.getCurrentData().stream().map(e -> new String(e.getData())).collect(Collectors.toList());
+    return clusterNodes.getCurrentData().stream()
+      .map(childData -> resolveNodeId.apply(childData.getPath()))
+      .collect(Collectors.toList());
   }
 
   @Override
@@ -241,59 +245,64 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void setNodeInfo(NodeInfo nodeInfo, Promise<Void> promise) {
-    // FIXME
+    synchronized (this) {
+      this.nodeInfo = nodeInfo;
+    }
+    try {
+      Buffer buffer = Buffer.buffer();
+      nodeInfo.writeToBuffer(buffer);
+      curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c,e) -> {
+        if (e.getType() == CuratorEventType.SET_DATA || e.getType() == CuratorEventType.CREATE) {
+          vertx.runOnContext(Avoid -> {
+            localNodeInfo.put(nodeId, nodeInfo);
+            promise.complete();
+          });
+        }
+      }).withUnhandledErrorListener(log::error).forPath(ZK_PATH_CLUSTER_NODE + nodeId, buffer.getBytes());
+    } catch (Exception e) {
+      log.error("create node failed.", e);
+    }
   }
 
   @Override
-  public NodeInfo getNodeInfo() {
-    // FIXME
-    return null;
+  public synchronized NodeInfo getNodeInfo() {
+    return nodeInfo;
   }
 
   @Override
   public void getNodeInfo(String nodeId, Promise<NodeInfo> promise) {
-    // FIXME
+    vertx.executeBlocking(prom -> {
+      prom.complete(Optional.ofNullable(clusterNodes.getCurrentData(ZK_PATH_CLUSTER_NODE + nodeId))
+        .map(childData -> {
+          Buffer buffer = Buffer.buffer(childData.getData());
+          NodeInfo nodeInfo = new NodeInfo();
+          nodeInfo.readFromBuffer(0, buffer);
+          return nodeInfo;
+        }).orElseThrow(() -> new VertxException("Not a member of the cluster")));
+    }, false, promise);
   }
 
   private void addLocalNodeId() throws VertxException {
     clusterNodes = new PathChildrenCache(curator, ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH, true);
     clusterNodes.getListenable().addListener(this);
     try {
-      clusterNodes.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
+      clusterNodes.start(PathChildrenCache.StartMode.NORMAL);
       //Join to the cluster
       createThisNode();
       joined = true;
+      subsMapHelper = new SubsMapHelper(curator, vertx, nodeSelector, nodeId);
     } catch (Exception e) {
       throw new VertxException(e);
     }
   }
 
   private void createThisNode() throws Exception {
-    //clean ha node would be happened multi times with multi vertx node in startup, so we have a lock to avoid conflict.
-    Promise<Lock> promise = Promise.promise();
-    getLockWithTimeout("__cluster_init_lock", 3000L, promise);
-    promise.future().onComplete(lockAsyncResult -> {
-      if (lockAsyncResult.succeeded()) {
-        try {
-          //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
-          //child of this path.
-          if (clusterNodes.getCurrentData().size() == 0 && curator.checkExists().forPath("/syncMap") != null)
-            if (curator.checkExists().forPath("/syncMap/" + VERTX_HA_NODE) != null) {
-              getSyncMap(VERTX_HA_NODE).clear();
-            }
-          if (curator.checkExists().forPath("/syncMap/" + VERTX_HA_NODE) != null) {
-            getSyncMap(VERTX_HA_NODE).clear();
-          }
-        } catch (Exception ex) {
-          log.error("check zk node failed.", ex);
-        } finally {
-          lockAsyncResult.result().release();
-        }
-      } else {
-        log.error("get cluster init lock failed.", lockAsyncResult.cause());
-      }
-    });
-    curator.create().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
+    try {
+      curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
+    } catch (KeeperException.NodeExistsException e) {
+      //idempotent
+      log.info("node:" + nodeId + " have created successful.");
+    }
   }
 
   @Override
@@ -301,7 +310,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     vertx.executeBlocking(prom -> {
       if (!active) {
         active = true;
-
         lockReleaseExec = Executors.newCachedThreadPool(r -> new Thread(r, "vertx-zookeeper-service-release-lock-thread"));
 
         //The curator instance has been passed using the constructor.
@@ -352,6 +360,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         } catch (Exception e) {
           prom.fail(e);
         }
+      } else {
+        prom.complete();
       }
     }, promise);
   }
@@ -362,23 +372,16 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       synchronized (ZookeeperClusterManager.this) {
         if (active) {
           active = false;
+          joined = false;
           lockReleaseExec.shutdown();
           try {
-            curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
-              if (event.getType() == CuratorEventType.DELETE) {
-                if (customCuratorCluster) {
-                  prom.complete();
-                } else {
-                  if (curator.getState() == CuratorFrameworkState.STARTED) {
-                    curator.close();
-                    prom.complete();
-                  }
-                }
-              }
-            }).forPath(ZK_PATH_CLUSTER_NODE + nodeId);
+            clusterNodes.close();
+            subsMapHelper.close();
+            curator.close();
           } catch (Exception e) {
-            log.error(e);
-            prom.fail(e);
+            log.warn("zookeeper close exception.", e);
+          } finally {
+            prom.complete();
           }
         } else prom.complete();
       }
@@ -392,17 +395,19 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void addRegistration(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
-    // FIXME
+    subsMapHelper.put(address, registrationInfo, promise);
   }
 
   @Override
   public void removeRegistration(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
-    // FIXME
+    subsMapHelper.remove(address, registrationInfo, promise);
   }
 
   @Override
   public void getRegistrations(String address, Promise<List<RegistrationInfo>> promise) {
-    // FIXME
+    vertx.executeBlocking(prom -> {
+      prom.complete(subsMapHelper.get(address));
+    }, false, promise);
   }
 
   @Override
@@ -411,8 +416,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     switch (event.getType()) {
       case CHILD_ADDED:
         try {
-          if (nodeListener != null) {
-            nodeListener.nodeAdded(new String(event.getData().getData()));
+          if (nodeListener != null && client.getState() != CuratorFrameworkState.STOPPED) {
+            nodeListener.nodeAdded(resolveNodeId.apply(event.getData().getPath()));
           }
         } catch (Throwable t) {
           log.error("Failed to handle memberAdded", t);
@@ -420,19 +425,30 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         break;
       case CHILD_REMOVED:
         try {
-          if (nodeListener != null) {
-            nodeListener.nodeLeft(new String(event.getData().getData()));
+          if (nodeListener != null && client.getState() != CuratorFrameworkState.STOPPED) {
+            nodeListener.nodeLeft(resolveNodeId.apply(event.getData().getPath()));
           }
         } catch (Throwable t) {
-          log.error("Failed to handle memberRemoved", t);
+          log.warn("Failed to handle memberRemoved", t);
         }
         break;
       case CHILD_UPDATED:
-        log.warn("Weird event that update cluster node. path:" + event.getData().getPath());
+        //log.warn("Weird event that update cluster node. path:" + event.getData().getPath());
         break;
       case CONNECTION_RECONNECTED:
         if (joined) {
           createThisNode();
+          List<Future> futures = new ArrayList<>();
+          for(Map.Entry<String, NodeInfo> entry : localNodeInfo.entrySet()) {
+            Promise promise = Promise.promise();
+            setNodeInfo(entry.getValue(), promise);
+            futures.add(promise.future());
+          }
+          CompositeFuture.all(futures).onComplete(ar -> {
+            if (ar.failed()) {
+              log.error("recover node info failed.", ar.cause());
+            }
+          });
         }
         break;
       case CONNECTION_SUSPENDED:
@@ -441,6 +457,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         break;
       case CONNECTION_LOST:
         //release locks and clean locks
+        joined = false;
         locks.values().forEach(ZKLock::release);
         locks.clear();
         break;

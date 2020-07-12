@@ -39,10 +39,10 @@ public class ZKClusteredSessionHandlerTest extends ClusteredSessionHandlerTest {
     return zkClustered.getClusterManager();
   }
 
-  @Override
-  @Test
-  @Ignore("Not supported")
-  public void testRetryTimeout() throws Exception {
-    super.testRetryTimeout();
+  @Ignore @Test
+  public void testSessionExpires() {
+
   }
+
+
 }
