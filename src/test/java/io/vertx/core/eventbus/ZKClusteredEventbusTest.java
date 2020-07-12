@@ -40,37 +40,6 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     }
   }
 
-  protected void startNodes(int numNodes, VertxOptions options) {
-    CountDownLatch latch = new CountDownLatch(numNodes);
-    vertices = new Vertx[numNodes];
-    for (int i = 0; i < numNodes; i++) {
-      int index = i;
-      options.setClusterManager(getClusterManager())
-        .getEventBusOptions().setHost("localhost").setPort(0);
-      clusteredVertx(options, ar -> {
-        try {
-          if (ar.failed()) {
-            ar.cause().printStackTrace();
-          }
-          assertTrue("Failed to start node", ar.succeeded());
-          vertices[index] = ar.result();
-        } finally {
-          latch.countDown();
-        }
-      });
-    }
-    try {
-      Thread.sleep(1500L);
-    } catch (InterruptedException e) {
-      //
-    }
-    try {
-      assertTrue(latch.await(2, TimeUnit.MINUTES));
-    } catch (InterruptedException e) {
-      fail(e.getMessage());
-    }
-  }
-
   public void after() throws Exception {
     super.after();
     zkClustered.stop();

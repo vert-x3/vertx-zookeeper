@@ -24,6 +24,8 @@ import io.vertx.core.shareddata.impl.ClusterSerializable;
 import org.apache.curator.RetryLoop;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.api.ACLBackgroundPathAndBytesable;
+import org.apache.curator.framework.api.CreateModable;
 import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.framework.api.ProtectACLCreateModeStatPathAndBytesable;
 import org.apache.curator.retry.ExponentialBackoffRetry;
@@ -48,8 +50,6 @@ abstract class ZKMap<K, V> {
   protected final String mapName;
 
   static final String ZK_PATH_ASYNC_MAP = "asyncMap";
-  static final String ZK_PATH_ASYNC_MULTI_MAP = "asyncMultiMap";
-  static final String EVENTBUS_PATH = "/" + ZK_PATH_ASYNC_MULTI_MAP + "/__vertx.subs/";
   static final String ZK_PATH_SYNC_MAP = "syncMap";
 
   private RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
@@ -57,8 +57,8 @@ abstract class ZKMap<K, V> {
   ZKMap(CuratorFramework curator, Vertx vertx, String mapType, String mapName) {
     this.curator = curator;
     this.vertx = vertx;
-    this.mapName = mapName;
-    this.mapPath = "/" + mapType + "/" + mapName;
+    this.mapName = mapName.replaceAll("\\/","");
+    this.mapPath = "/" + mapType + "/" + this.mapName;
   }
 
   String keyPath(K k) {
@@ -225,16 +225,10 @@ abstract class ZKMap<K, V> {
   Future<Stat> create(String path, V v, Optional<Long> timeToLive) {
     Promise<Stat> future = Promise.promise();
     try {
-      //there are two type of node - ephemeral and persistent.
-      //if path is 'asyncMultiMap/subs/' which save the data of eventbus address and serverID we could using ephemeral,
-      //since the lifecycle of this path as long as this verticle.
-      CreateMode nodeMode = path.contains(EVENTBUS_PATH) ? CreateMode.EPHEMERAL : CreateMode.PERSISTENT;
-      //as zk 3.5.x provide ttl node mode, we should consider it.
-      nodeMode = timeToLive.isPresent() ? CreateMode.PERSISTENT_WITH_TTL : nodeMode;
-      ProtectACLCreateModeStatPathAndBytesable<String> pathAndBytesable = timeToLive.isPresent()
-        ? curator.create().withTtl(timeToLive.get()).creatingParentsIfNeeded()
-        : curator.create().creatingParentsIfNeeded();
-      pathAndBytesable.withMode(nodeMode).inBackground((cl, el) -> {
+      ACLBackgroundPathAndBytesable<String> creator = timeToLive.isPresent()
+        ? curator.create().withTtl(timeToLive.get()).creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT_WITH_TTL)
+        : curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT);
+      creator.inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
           vertx.runOnContext(event -> future.complete(el.getStat()));
         }

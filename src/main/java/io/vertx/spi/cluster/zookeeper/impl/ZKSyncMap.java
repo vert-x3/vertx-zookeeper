@@ -16,16 +16,17 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.VertxException;
+import io.vertx.core.impl.NoStackTraceThrowable;
+import io.vertx.core.impl.logging.Logger;
+import io.vertx.core.impl.logging.LoggerFactory;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
+import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
 import java.io.Serializable;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -34,6 +35,8 @@ import java.util.stream.Collectors;
  * Created by Stream.Liu
  */
 public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
+
+  private static final Logger logger = LoggerFactory.getLogger(ZKSyncMap.class);
 
   public ZKSyncMap(CuratorFramework curator, String mapName) {
     super(curator, null, ZK_PATH_SYNC_MAP, mapName);
@@ -99,7 +102,9 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
         return keyValue.getValue();
       }
     } catch (Exception e) {
-      if (!(e instanceof KeeperException.NodeExistsException)) {
+      if (e instanceof VertxException && e.getCause() instanceof KeeperException.NoNodeException) {
+        logger.warn("zookeeper node lost. " + e.getCause().getMessage());
+      } else {
         throw new VertxException(e);
       }
     }
@@ -157,6 +162,9 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
         try {
           KeyValue<K, V> keyValue = asObject(curator.getData().forPath(keyPath((K) k)));
           return keyValue.getKey();
+        } catch (KeeperException.NoNodeException nodeLostEx) {
+          logger.warn("node lost " + nodeLostEx.getMessage());
+          return null;
         } catch (Exception ex) {
           throw new VertxException(ex);
         }
