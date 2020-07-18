@@ -35,7 +35,6 @@ import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.framework.recipes.atomic.DistributedAtomicLong;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
@@ -75,9 +74,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private CuratorFramework curator;
   private boolean customCuratorCluster;
   private RetryPolicy retryPolicy;
-  private Map<String, ZKLock> locks = new ConcurrentHashMap<>();
-  private Map<String, AsyncMap<?, ?>> asyncMapCache = new ConcurrentHashMap<>();
-  private Map<String, AsyncMultiMap<?, ?>> asyncMultiMapCache = new ConcurrentHashMap<>();
+  private final Map<String, ZKLock> locks = new ConcurrentHashMap<>();
+  private final Map<String, AsyncMap<?, ?>> asyncMapCache = new ConcurrentHashMap<>();
+  private final Map<String, AsyncMultiMap<?, ?>> asyncMultiMapCache = new ConcurrentHashMap<>();
 
   private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.json";
   private static final String CONFIG_FILE = "zookeeper.json";
@@ -364,24 +363,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           active = false;
           lockReleaseExec.shutdown();
           try {
-            curator.delete().deletingChildrenIfNeeded().inBackground((client, event) -> {
-              if (event.getType() == CuratorEventType.DELETE) {
-                if (customCuratorCluster) {
-                  future.complete();
-                } else {
-                  if (curator.getState() == CuratorFrameworkState.STARTED) {
-                    curator.close();
-                    future.complete();
-                  }
-                }
-              }
-            }).forPath(ZK_PATH_CLUSTER_NODE + nodeID);
-            AsyncMapTTLMonitor.getInstance(vertx, this).stop();
+            this.clusterNodes.close();
+            this.curator.close();
           } catch (Exception e) {
-            log.error(e);
-            future.fail(e);
+            log.warn("zookeeper close exception.", e);
           }
-        } else future.complete();
+          log.info("zookeeper client have been closed.");
+        }
+        future.complete();
       }
     }, resultHandler);
   }
