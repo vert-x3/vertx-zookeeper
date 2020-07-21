@@ -46,14 +46,17 @@ class ChoosableSet<T> implements ChoosableIterable<T>, Serializable {
 
   public void add(T elem) {
     ids.add(elem);
+    iter = null;
   }
 
   public void remove(T elem) {
     ids.remove(elem);
+    iter = null;
   }
 
   public void merge(ChoosableSet<T> toMerge) {
     ids.addAll(toMerge.ids);
+    iter = null;
   }
 
   public boolean isEmpty() {
