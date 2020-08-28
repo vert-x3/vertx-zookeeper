@@ -21,7 +21,6 @@ import io.vertx.core.buffer.Buffer;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
-import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.Counter;
@@ -39,6 +38,7 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException;
 
 import java.io.*;
 import java.util.*;
@@ -72,7 +72,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private boolean customCuratorCluster;
   private RetryPolicy retryPolicy;
   private SubsMapHelper subsMapHelper;
-  private Map<String, NodeInfo> localNodeInfo = new ConcurrentHashMap<>();
+  private final Map<String, NodeInfo> localNodeInfo = new ConcurrentHashMap<>();
   private final Map<String, ZKLock> locks = new ConcurrentHashMap<>();
   private final Map<String, AsyncMap<?, ?>> asyncMapCache = new ConcurrentHashMap<>();
 
@@ -254,12 +254,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       nodeInfo.writeToBuffer(buffer);
       curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c,e) -> {
         if (e.getType() == CuratorEventType.SET_DATA || e.getType() == CuratorEventType.CREATE) {
-          localNodeInfo.put(nodeId, nodeInfo);
-          promise.complete();
+          vertx.runOnContext(Avoid -> {
+            localNodeInfo.put(nodeId, nodeInfo);
+            promise.complete();
+          });
         }
-      }, vertx.getEventLoopGroup())
-        .withUnhandledErrorListener(log::error)
-        .forPath(ZK_PATH_CLUSTER_NODE + nodeId, buffer.getBytes());
+      }).withUnhandledErrorListener(log::error).forPath(ZK_PATH_CLUSTER_NODE + nodeId, buffer.getBytes());
     } catch (Exception e) {
       log.error("create node failed.", e);
     }
@@ -279,15 +279,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           NodeInfo nodeInfo = new NodeInfo();
           nodeInfo.readFromBuffer(0, buffer);
           return nodeInfo;
-        }).orElse(null));
-    }, promise);
+        }).orElseThrow(() -> new VertxException("Not a member of the cluster")));
+    }, false, promise);
   }
 
   private void addLocalNodeId() throws VertxException {
     clusterNodes = new PathChildrenCache(curator, ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH, true);
     clusterNodes.getListenable().addListener(this);
     try {
-      clusterNodes.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
+      clusterNodes.start(PathChildrenCache.StartMode.NORMAL);
       //Join to the cluster
       createThisNode();
       joined = true;
@@ -298,31 +298,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   private void createThisNode() throws Exception {
-    //clean ha node would be happened multi times with multi vertx node in startup, so we have a lock to avoid conflict.
-    Promise<Lock> promise = Promise.promise();
-    getLockWithTimeout("__cluster_init_lock", 3000L, promise);
-    promise.future().onComplete(lockAsyncResult -> {
-      if (lockAsyncResult.succeeded()) {
-        try {
-          //we have to clear `__vertx.haInfo` node if cluster is empty, as __haInfo is PERSISTENT mode, so we can not delete last
-          //child of this path.
-          if (clusterNodes.getCurrentData().size() == 0 && curator.checkExists().forPath("/syncMap") != null)
-            if (curator.checkExists().forPath("/syncMap/" + VERTX_HA_NODE) != null) {
-              getSyncMap(VERTX_HA_NODE).clear();
-            }
-          if (curator.checkExists().forPath("/syncMap/" + VERTX_HA_NODE) != null) {
-            getSyncMap(VERTX_HA_NODE).clear();
-          }
-        } catch (Exception ex) {
-          log.error("check zk node failed.", ex);
-        } finally {
-          lockAsyncResult.result().release();
-        }
-      } else {
-        log.error("get cluster init lock failed.", lockAsyncResult.cause());
-      }
-    });
-    curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
+    try {
+      curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
+    } catch (KeeperException.NodeExistsException e) {
+      //idempotent
+      log.info("node:" + nodeId + " have create successful.");
+    }
   }
 
   @Override
@@ -393,7 +374,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         if (active) {
           active = false;
           lockReleaseExec.shutdown();
-          curator.close();
+          try {
+            clusterNodes.close();
+            curator.close();
+          } catch (Exception e) {
+            log.warn("zookeeper close exception.", e);
+          } finally {
+            prom.complete();
+          }
         } else prom.complete();
       }
     }, promise);
@@ -427,7 +415,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     switch (event.getType()) {
       case CHILD_ADDED:
         try {
-          if (nodeListener != null) {
+          if (nodeListener != null && client.getState() != CuratorFrameworkState.STOPPED) {
             nodeListener.nodeAdded(resolveNodeId.apply(event.getData().getPath()));
           }
         } catch (Throwable t) {
@@ -436,11 +424,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         break;
       case CHILD_REMOVED:
         try {
-          if (nodeListener != null) {
+          if (nodeListener != null && client.getState() != CuratorFrameworkState.STOPPED) {
             nodeListener.nodeLeft(resolveNodeId.apply(event.getData().getPath()));
           }
         } catch (Throwable t) {
-          log.error("Failed to handle memberRemoved", t);
+          log.warn("Failed to handle memberRemoved", t);
         }
         break;
       case CHILD_UPDATED:
@@ -456,9 +444,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
             futures.add(promise.future());
           }
           CompositeFuture.all(futures).onComplete(ar -> {
-            if (ar.succeeded()) {
-              log.info("recover node info success.");
-            } else {
+            if (ar.failed()) {
               log.error("recover node info failed.", ar.cause());
             }
           });
@@ -472,6 +458,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         //release locks and clean locks
         locks.values().forEach(ZKLock::release);
         locks.clear();
+        log.warn("zookeeper client have lost, please restart verticle.");
         break;
     }
   }

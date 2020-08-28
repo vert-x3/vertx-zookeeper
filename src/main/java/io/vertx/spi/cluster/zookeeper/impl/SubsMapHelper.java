@@ -13,6 +13,7 @@ import io.vertx.core.spi.cluster.RegistrationInfo;
 import io.vertx.core.spi.cluster.RegistrationUpdateEvent;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
+import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
@@ -38,9 +39,9 @@ public class SubsMapHelper implements TreeCacheListener {
   private static final String VERTX_SUBS_NAME = "/__vertx.subs";
   private static final Logger log = LoggerFactory.getLogger(SubsMapHelper.class);
 
-  private Function<String, String> keyPath = address -> VERTX_SUBS_NAME + "/" + address;
-  private Function<RegistrationInfo, String> valuePath = registrationInfo -> registrationInfo.nodeId() + "-" + registrationInfo.seq();
-  private BiFunction<String, RegistrationInfo, String> fullPath = (address, registrationInfo) -> keyPath.apply(address) + "/" + valuePath.apply(registrationInfo);
+  private final Function<String, String> keyPath = address -> VERTX_SUBS_NAME + "/" + address;
+  private final Function<RegistrationInfo, String> valuePath = registrationInfo -> registrationInfo.nodeId() + "-" + registrationInfo.seq();
+  private final BiFunction<String, RegistrationInfo, String> fullPath = (address, registrationInfo) -> keyPath.apply(address) + "/" + valuePath.apply(registrationInfo);
 
   public SubsMapHelper(CuratorFramework curator, VertxInternal vertx, NodeSelector nodeSelector, String nodeId) {
     this.curator = curator;
@@ -61,16 +62,16 @@ public class SubsMapHelper implements TreeCacheListener {
       registrationInfo.writeToBuffer(buffer);
       curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
         if (e.getType() == CuratorEventType.CREATE || e.getType() == CuratorEventType.SET_DATA) {
-          ownSubs.compute(address, (add, curr) -> {
-            Set<RegistrationInfo> res = curr != null ? curr : new CopyOnWriteArraySet<>();
-            res.add(registrationInfo);
-            return res;
+          vertx.runOnContext(Avoid -> {
+            ownSubs.compute(address, (add, curr) -> {
+              Set<RegistrationInfo> res = curr != null ? curr : new CopyOnWriteArraySet<>();
+              res.add(registrationInfo);
+              return res;
+            });
+            promise.complete();
           });
-          promise.complete();
         }
-      }, vertx.getEventLoopGroup())
-        .withUnhandledErrorListener(log::error)
-        .forPath(fullPath.apply(address, registrationInfo), buffer.getBytes());
+      }).withUnhandledErrorListener(log::error).forPath(fullPath.apply(address, registrationInfo), buffer.getBytes());
     } catch (Exception e) {
       log.error(String.format("create subs address %s failed.", address), e);
     }
@@ -91,16 +92,18 @@ public class SubsMapHelper implements TreeCacheListener {
     try {
       curator.delete().inBackground((c, e) -> {
         if (e.getType() == CuratorEventType.DELETE) {
-          ownSubs.computeIfPresent(address, (add, curr) -> {
-            curr.remove(registrationInfo);
-            return curr.isEmpty() ? null : curr;
+          vertx.runOnContext(aVoid -> {
+            ownSubs.computeIfPresent(address, (add, curr) -> {
+              curr.remove(registrationInfo);
+              return curr.isEmpty() ? null : curr;
+            });
+            promise.complete();
           });
         }
-        promise.complete();
-      }, vertx.getEventLoopGroup())
-        .withUnhandledErrorListener(log::error).forPath(fullPath.apply(address, registrationInfo));
+      }).forPath(fullPath.apply(address, registrationInfo));
     } catch (Exception e) {
       log.error(String.format("remove subs address %s failed.", address), e);
+      promise.fail(e);
     }
   }
 

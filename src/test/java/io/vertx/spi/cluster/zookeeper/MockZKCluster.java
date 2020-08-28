@@ -22,6 +22,10 @@ public class MockZKCluster {
   private TestingServer server;
   private Set<ZookeeperClusterManager> clusterManagers = new HashSet<>();
 
+  static {
+    System.setProperty("zookeeper.extendedTypesEnabled", "true");
+  }
+
   public MockZKCluster() {
     try {
       server = new TestingServer(new InstanceSpec(null, -1, -1, -1, true, -1, -1, 120), true);

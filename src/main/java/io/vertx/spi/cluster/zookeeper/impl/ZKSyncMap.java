@@ -16,7 +16,6 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.VertxException;
-import io.vertx.core.impl.NoStackTraceThrowable;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
 import org.apache.curator.framework.CuratorFramework;
@@ -26,7 +25,10 @@ import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -120,7 +122,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
       if (get(key) != null) {
         curator.setData().forPath(keyPath, valueBytes);
       } else {
-        curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(keyPath, valueBytes);
+        curator.create().creatingParentsIfNeeded().withMode(CreateMode.CONTAINER).forPath(keyPath, valueBytes);
       }
       return value;
     } catch (Exception e) {
@@ -148,7 +150,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   public void clear() {
     try {
       curator.delete().deletingChildrenIfNeeded().forPath(mapPath);
-      curator.create().creatingParentsIfNeeded().forPath(mapPath);
+      curator.create().creatingParentsIfNeeded().withMode(CreateMode.CONTAINER).forPath(mapPath);
     } catch (Exception e) {
       throw new VertxException(e);
     }
@@ -198,13 +200,17 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
     CountDownLatch latch = new CountDownLatch(1);
     try {
       curator.sync().inBackground((client, event) -> {
+        if (client.getState() == CuratorFrameworkState.STOPPED) {
+          latch.countDown();
+          return;
+        }
         if (event.getPath().equals(path) && event.getType() == CuratorEventType.SYNC) {
           latch.countDown();
         }
       }).forPath(path);
       latch.await(3L, TimeUnit.SECONDS);
     } catch (Exception e) {
-      if (!(e instanceof KeeperException.NodeExistsException)) {
+      if (!(e instanceof KeeperException.NoNodeException)) {
         throw new VertxException(e);
       }
     }

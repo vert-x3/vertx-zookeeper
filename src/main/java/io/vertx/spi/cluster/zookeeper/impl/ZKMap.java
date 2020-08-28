@@ -25,9 +25,7 @@ import org.apache.curator.RetryLoop;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.ACLBackgroundPathAndBytesable;
-import org.apache.curator.framework.api.CreateModable;
 import org.apache.curator.framework.api.CuratorEventType;
-import org.apache.curator.framework.api.ProtectACLCreateModeStatPathAndBytesable;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
@@ -36,7 +34,10 @@ import org.apache.zookeeper.data.Stat;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -47,26 +48,27 @@ abstract class ZKMap<K, V> {
   final CuratorFramework curator;
   protected final Vertx vertx;
   final String mapPath;
-  protected final String mapName;
 
   static final String ZK_PATH_ASYNC_MAP = "asyncMap";
   static final String ZK_PATH_SYNC_MAP = "syncMap";
+  static final Predicate<String> pathChecker = path -> {
+    Objects.requireNonNull(path, "zookeeper node path can not be null.");
+    if (path.contains("/")) throw new IllegalArgumentException("can not contain forward slash char in ZK node path");
+    return true;
+  };
 
-  private RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
+  private final RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
 
   ZKMap(CuratorFramework curator, Vertx vertx, String mapType, String mapName) {
     this.curator = curator;
     this.vertx = vertx;
-    this.mapName = mapName.replaceAll("\\/","");
-    this.mapPath = "/" + mapType + "/" + this.mapName;
+    pathChecker.test(mapName);
+    this.mapPath = "/" + mapType + "/" + mapName;
   }
 
   String keyPath(K k) {
+    pathChecker.test(k.toString());
     return mapPath + "/" + k.toString();
-  }
-
-  String valuePath(K k, Object v) {
-    return keyPath(k) + "/" + v.toString();
   }
 
   Future<Void> assertKeyIsNotNull(Object key) {
@@ -108,6 +110,7 @@ abstract class ZKMap<K, V> {
   }
 
   <T> T asObject(byte[] bytes) throws Exception {
+    if (bytes == null) return null; //TTL
     ByteArrayInputStream byteIn = new ByteArrayInputStream(bytes);
     DataInputStream in = new DataInputStream(byteIn);
     boolean isClusterSerializable = in.readBoolean();
@@ -230,7 +233,7 @@ abstract class ZKMap<K, V> {
         : curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT);
       creator.inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
-          vertx.runOnContext(event -> future.complete(el.getStat()));
+          vertx.runOnContext(aVoid -> future.complete(el.getStat()));
         }
       }).forPath(path, asByte(v));
     } catch (Exception ex) {
