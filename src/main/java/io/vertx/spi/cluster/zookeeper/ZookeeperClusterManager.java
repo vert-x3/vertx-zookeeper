@@ -84,7 +84,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
   private static final String ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH = "/cluster/nodes";
-  private static final String VERTX_HA_NODE = "__vertx.haInfo";
 
   private ExecutorService lockReleaseExec;
 
@@ -373,6 +372,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       synchronized (ZookeeperClusterManager.this) {
         if (active) {
           active = false;
+          joined = false;
           lockReleaseExec.shutdown();
           try {
             clusterNodes.close();
@@ -458,7 +458,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         //release locks and clean locks
         locks.values().forEach(ZKLock::release);
         locks.clear();
-        log.warn("zookeeper client have lost, please restart verticle.");
         break;
     }
   }

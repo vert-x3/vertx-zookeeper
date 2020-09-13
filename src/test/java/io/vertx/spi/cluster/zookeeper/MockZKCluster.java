@@ -37,6 +37,8 @@ public class MockZKCluster {
   public JsonObject getDefaultConfig() {
     JsonObject config = new JsonObject();
     config.put("zookeeperHosts", server.getConnectString());
+    config.put("sessionTimeout", 5000);
+    config.put("connectTimeout", 3000);
     config.put("rootPath", "io.vertx");
     config.put("retry", new JsonObject()
       .put("initialSleepTime", 500)
@@ -48,6 +50,7 @@ public class MockZKCluster {
     try {
       clusterManagers.forEach(clusterManager -> clusterManager.getCuratorFramework().close());
       clusterManagers.clear();
+      server.restart();
     } catch (Exception e) {
       e.printStackTrace();
     }

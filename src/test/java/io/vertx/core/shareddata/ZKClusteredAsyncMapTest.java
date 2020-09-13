@@ -21,8 +21,6 @@ import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 import org.junit.Test;
 
-import java.util.Objects;
-
 /**
  *
  */
