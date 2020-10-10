@@ -56,6 +56,10 @@ public class SubsMapHelper implements TreeCacheListener {
     this.nodeId = nodeId;
   }
 
+  public void close() {
+    treeCache.close();
+  }
+
   public void put(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
     try {
       Buffer buffer = Buffer.buffer();
@@ -68,6 +72,7 @@ public class SubsMapHelper implements TreeCacheListener {
               res.add(registrationInfo);
               return res;
             });
+            System.out.println("==============> register address:" + address + " ->" + registrationInfo.nodeId() + registrationInfo.seq());
             promise.complete();
           });
         }
@@ -90,13 +95,14 @@ public class SubsMapHelper implements TreeCacheListener {
 
   public void remove(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
     try {
-      curator.delete().inBackground((c, e) -> {
+      curator.delete().guaranteed().inBackground((c, e) -> {
         if (e.getType() == CuratorEventType.DELETE) {
           vertx.runOnContext(aVoid -> {
             ownSubs.computeIfPresent(address, (add, curr) -> {
               curr.remove(registrationInfo);
               return curr.isEmpty() ? null : curr;
             });
+            System.out.println("==============> remove register address:" + address + " ->" + registrationInfo.nodeId() + registrationInfo.seq());
             promise.complete();
           });
         }

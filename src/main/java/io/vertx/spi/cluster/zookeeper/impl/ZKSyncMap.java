@@ -210,6 +210,9 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
       }).forPath(path);
       latch.await(3L, TimeUnit.SECONDS);
     } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       if (!(e instanceof KeeperException.NoNodeException)) {
         throw new VertxException(e);
       }

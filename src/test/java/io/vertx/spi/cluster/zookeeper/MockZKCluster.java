@@ -5,22 +5,24 @@ import io.vertx.core.spi.cluster.ClusterManager;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Stream.Liu
  */
 public class MockZKCluster {
 
-  private RetryPolicy retryPolicy = new ExponentialBackoffRetry(2000, 1, 8000);
+  private final RetryPolicy retryPolicy = new ExponentialBackoffRetry(2000, 1, 8000);
   private TestingServer server;
-  private Set<ZookeeperClusterManager> clusterManagers = new HashSet<>();
+  private final List<ZookeeperClusterManager> clusterManagers = new ArrayList<>();
 
   static {
     System.setProperty("zookeeper.extendedTypesEnabled", "true");
@@ -48,32 +50,35 @@ public class MockZKCluster {
 
   public void stop() {
     try {
-      clusterManagers.forEach(clusterManager -> clusterManager.getCuratorFramework().close());
       clusterManagers.clear();
+      CountDownLatch latch = new CountDownLatch(1);
+      if (server == null) {
+        server = new TestingServer(new InstanceSpec(null, -1, -1, -1, true, -1, -1, 120), false);
+      }
       server.restart();
+      latch.await(200L, TimeUnit.MILLISECONDS);
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
 
   public ClusterManager getClusterManager() {
+    String connectString = server.getConnectString();
     CuratorFramework curator = CuratorFrameworkFactory.builder()
-      .namespace("io.vertx")
-      .sessionTimeoutMs(3000)
-      .connectionTimeoutMs(1000)
-      .connectString(server.getConnectString())
-      .retryPolicy(retryPolicy).build();
-    curator.start();
-    //there is take up time for zk client thread start up.
-    while (curator.getState() != CuratorFrameworkState.STARTED) {
+        .namespace("io.vertx")
+        .sessionTimeoutMs(3000)
+        .connectionTimeoutMs(2000)
+        .connectString(connectString)
+        .retryPolicy(retryPolicy).build();
+      curator.start();
       try {
-        Thread.sleep(100);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
+        curator.blockUntilConnected(2, TimeUnit.SECONDS);
+      } catch (Exception e) {
+          e.printStackTrace();
       }
-    }
-    ZookeeperClusterManager zookeeperClusterManager = new ZookeeperClusterManager(retryPolicy, curator);
-    clusterManagers.add(zookeeperClusterManager);
-    return zookeeperClusterManager;
+      String uuid = UUID.randomUUID().toString();
+      ZookeeperClusterManager zookeeperClusterManager = new ZookeeperClusterManager(curator, uuid);
+      clusterManagers.add(zookeeperClusterManager);
+      return zookeeperClusterManager;
   }
 }

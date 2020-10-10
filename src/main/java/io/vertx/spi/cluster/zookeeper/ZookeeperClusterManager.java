@@ -301,7 +301,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
     } catch (KeeperException.NodeExistsException e) {
       //idempotent
-      log.info("node:" + nodeId + " have create successful.");
+      log.info("node:" + nodeId + " have created successful.");
     }
   }
 
@@ -376,6 +376,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           lockReleaseExec.shutdown();
           try {
             clusterNodes.close();
+            subsMapHelper.close();
             curator.close();
           } catch (Exception e) {
             log.warn("zookeeper close exception.", e);
@@ -456,6 +457,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         break;
       case CONNECTION_LOST:
         //release locks and clean locks
+        joined = false;
         locks.values().forEach(ZKLock::release);
         locks.clear();
         break;
