@@ -72,7 +72,6 @@ public class SubsMapHelper implements TreeCacheListener {
               res.add(registrationInfo);
               return res;
             });
-            System.out.println("==============> register address:" + address + " ->" + registrationInfo.nodeId() + registrationInfo.seq());
             promise.complete();
           });
         }
@@ -102,7 +101,6 @@ public class SubsMapHelper implements TreeCacheListener {
               curr.remove(registrationInfo);
               return curr.isEmpty() ? null : curr;
             });
-            System.out.println("==============> remove register address:" + address + " ->" + registrationInfo.nodeId() + registrationInfo.seq());
             promise.complete();
           });
         }

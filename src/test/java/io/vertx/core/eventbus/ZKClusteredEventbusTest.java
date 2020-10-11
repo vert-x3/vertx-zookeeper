@@ -58,7 +58,6 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
         } else {
           consumer.accept(msg.body());
         }
-        System.out.println("------------message handler-------->" + count.get());
         if (count.incrementAndGet() == numNodes - 1) {
           testComplete();
         }
@@ -69,7 +68,6 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
       @Override
       public void handle(AsyncResult<Void> ar) {
         assertTrue(ar.succeeded());
-        System.out.println("------------register handler-------->" + count.get());
         if (registerCount.incrementAndGet() == 2) {
           vertices[0].setTimer(300L, h -> {
             vertices[0].eventBus().publish(ADDRESS1, val);
