@@ -15,7 +15,7 @@
   <properties>
     <stack.version>3.9.4-SNAPSHOT</stack.version>
     <curator.version>2.13.0</curator.version>
-    <junit.version>4.12</junit.version>
+    <junit.version>4.13.1</junit.version>
     <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
   </properties>
 
