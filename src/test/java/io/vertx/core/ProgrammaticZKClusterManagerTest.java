@@ -29,7 +29,6 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -99,8 +98,8 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     ZookeeperClusterManager mgr1 = new ZookeeperClusterManager(curator1);
     ZookeeperClusterManager mgr2 = new ZookeeperClusterManager(curator2);
-    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1);
-    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2);
+    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1).setClusterHost("127.0.0.1");
+    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2).setClusterHost("127.0.0.1");
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
@@ -111,7 +110,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
       res.result().eventBus().consumer("news", message -> {
         assertNotNull(message);
         assertTrue(message.body().equals("hello"));
-        message.reply("hi");
+        testComplete();
       });
       vertx1.set(res.result());
     });
@@ -122,10 +121,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
       assertTrue(res.succeeded());
       assertNotNull(mgr2.getCuratorFramework());
       vertx2.set(res.result());
-      res.result().eventBus().request("news", "hello", ar -> {
-        assertTrue(ar.succeeded());
-        testComplete();
-      });
+      res.result().eventBus().send("news", "hello");
     });
 
     await();
@@ -160,10 +156,8 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     ZookeeperClusterManager mgr1 = new ZookeeperClusterManager(curator1);
     ZookeeperClusterManager mgr2 = new ZookeeperClusterManager(curator2);
-    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1);
-    options1.getEventBusOptions().setHost("127.0.0.1");
-    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2);
-    options2.getEventBusOptions().setHost("127.0.0.1");
+    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1).setClusterHost("127.0.0.1");
+    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2).setClusterHost("127.0.0.1");
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
@@ -199,8 +193,10 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() == null && vertx2.get() == null);
 
-    assertTrue(curator1.getState() == CuratorFrameworkState.STOPPED);
-    assertTrue(curator2.getState() == CuratorFrameworkState.STOPPED);
+    // be sure stopping vertx did not cause or require our custom curator to close
+
+    assertTrue(curator1.getState() == CuratorFrameworkState.STARTED);
+    assertTrue(curator2.getState() == CuratorFrameworkState.STARTED);
 
     curator1.close();
     curator2.close();
@@ -218,8 +214,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     String nodeID = UUID.randomUUID().toString();
 
     ZookeeperClusterManager mgr = new ZookeeperClusterManager(curator, nodeID);
-    VertxOptions options = new VertxOptions().setClusterManager(mgr);
-    options.getEventBusOptions().setHost("127.0.0.1");
+    VertxOptions options = new VertxOptions().setClusterManager(mgr).setClusterHost("127.0.0.1");
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
 
@@ -285,10 +280,8 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     ZookeeperClusterManager mgr1 = new ZookeeperClusterManager(curator1);
     ZookeeperClusterManager mgr2 = new ZookeeperClusterManager(curator2);
-    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1);
-    options1.getEventBusOptions().setHost("127.0.0.1");
-    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2);
-    options2.getEventBusOptions().setHost("127.0.0.1");
+    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1).setClusterHost("127.0.0.1");
+    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2).setClusterHost("127.0.0.1");
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
@@ -324,8 +317,10 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() == null && vertx2.get() == null);
 
-    assertTrue(curator1.getState() == CuratorFrameworkState.STOPPED);
-    assertTrue(curator2.getState() == CuratorFrameworkState.STOPPED);
+    // be sure stopping vertx did not cause or require our custom hazelcast to shutdown
+
+    assertTrue(curator1.getState() == CuratorFrameworkState.STARTED);
+    assertTrue(curator2.getState() == CuratorFrameworkState.STARTED);
 
     curator1.close();
     curator2.close();

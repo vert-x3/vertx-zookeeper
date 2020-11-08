@@ -15,14 +15,12 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.CompositeFuture;
-import io.vertx.core.Future;
-import io.vertx.core.Promise;
-import io.vertx.core.Vertx;
+import io.vertx.core.*;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.shareddata.AsyncMap;
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.api.CuratorEventType;
+import org.apache.curator.framework.recipes.cache.ChildData;
+import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.zookeeper.data.Stat;
 
 import java.io.IOException;
@@ -34,8 +32,16 @@ import java.util.*;
  */
 public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
+  private final PathChildrenCache curatorCache;
+
   public ZKAsyncMap(Vertx vertx, CuratorFramework curator, String mapName) {
     super(curator, vertx, ZK_PATH_ASYNC_MAP, mapName);
+    this.curatorCache = new PathChildrenCache(curator, mapPath, true);
+    try {
+      curatorCache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
+    } catch (Exception e) {
+      throw new VertxException(e);
+    }
   }
 
   @Override
@@ -45,15 +51,16 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       .compose(checkResult -> {
         Promise<V> promise = Promise.promise();
         if (checkResult) {
-          try {
-            curator.getData().inBackground((c,e) -> {
-              if (e.getType() == CuratorEventType.GET_DATA) {
-                V value = asObject(e.getData());
-                vertx.runOnContext(aVoid -> promise.complete(value));
-              }
-            }).forPath(keyPath(k));
-          } catch (Exception e) {
-            promise.fail(e);
+          ChildData childData = curatorCache.getCurrentData(keyPath(k));
+          if (childData != null && childData.getData() != null) {
+            try {
+              V value = asObject(childData.getData());
+              promise.complete(value);
+            } catch (Exception e) {
+              promise.fail(e);
+            }
+          } else {
+            promise.complete();
           }
         } else {
           //ignore
@@ -96,13 +103,12 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       .compose(value -> {
         if (value == null) {
           if (timeoutOptional.isPresent()) {
-            return put(k, v, timeoutOptional).compose(aVoid -> Future.succeededFuture(null));
+            put(k, v, timeoutOptional);
           } else {
-            return put(k, v).compose(aVoid -> Future.succeededFuture(null));
+            put(k, v);
           }
-        } else {
-          return Future.succeededFuture(value);
         }
+        return Future.succeededFuture(value);
       });
   }
 
@@ -133,7 +139,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       })
       .compose(value -> {
         Promise<Boolean> promise = Promise.promise();
-        if (Objects.equals(value, v)) {
+        if (v.equals(value)) {
           delete(k, v).onComplete(deleteResult -> {
             if (deleteResult.succeeded()) promise.complete(true);
             else promise.fail(deleteResult.cause());

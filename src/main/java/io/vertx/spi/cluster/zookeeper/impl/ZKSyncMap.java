@@ -16,11 +16,8 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.VertxException;
-import io.vertx.core.impl.logging.Logger;
-import io.vertx.core.impl.logging.LoggerFactory;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
-import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
@@ -37,8 +34,6 @@ import java.util.stream.Collectors;
  * Created by Stream.Liu
  */
 public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
-
-  private static final Logger logger = LoggerFactory.getLogger(ZKSyncMap.class);
 
   public ZKSyncMap(CuratorFramework curator, String mapName) {
     super(curator, null, ZK_PATH_SYNC_MAP, mapName);
@@ -104,9 +99,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
         return keyValue.getValue();
       }
     } catch (Exception e) {
-      if (e instanceof VertxException && e.getCause() instanceof KeeperException.NoNodeException) {
-        logger.warn("zookeeper node lost. " + e.getCause().getMessage());
-      } else {
+      if (!(e instanceof KeeperException.NodeExistsException)) {
         throw new VertxException(e);
       }
     }
@@ -122,7 +115,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
       if (get(key) != null) {
         curator.setData().forPath(keyPath, valueBytes);
       } else {
-        curator.create().creatingParentsIfNeeded().withMode(CreateMode.CONTAINER).forPath(keyPath, valueBytes);
+        curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(keyPath, valueBytes);
       }
       return value;
     } catch (Exception e) {
@@ -150,7 +143,7 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
   public void clear() {
     try {
       curator.delete().deletingChildrenIfNeeded().forPath(mapPath);
-      curator.create().creatingParentsIfNeeded().withMode(CreateMode.CONTAINER).forPath(mapPath);
+      curator.create().creatingParentsIfNeeded().forPath(mapPath);
     } catch (Exception e) {
       throw new VertxException(e);
     }
@@ -164,9 +157,6 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
         try {
           KeyValue<K, V> keyValue = asObject(curator.getData().forPath(keyPath((K) k)));
           return keyValue.getKey();
-        } catch (KeeperException.NoNodeException nodeLostEx) {
-          logger.warn("node lost " + nodeLostEx.getMessage());
-          return null;
         } catch (Exception ex) {
           throw new VertxException(ex);
         }
@@ -200,20 +190,13 @@ public class ZKSyncMap<K, V> extends ZKMap<K, V> implements Map<K, V> {
     CountDownLatch latch = new CountDownLatch(1);
     try {
       curator.sync().inBackground((client, event) -> {
-        if (client.getState() == CuratorFrameworkState.STOPPED) {
-          latch.countDown();
-          return;
-        }
         if (event.getPath().equals(path) && event.getType() == CuratorEventType.SYNC) {
           latch.countDown();
         }
       }).forPath(path);
       latch.await(3L, TimeUnit.SECONDS);
     } catch (Exception e) {
-      if (e instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      if (!(e instanceof KeeperException.NoNodeException)) {
+      if (!(e instanceof KeeperException.NodeExistsException)) {
         throw new VertxException(e);
       }
     }

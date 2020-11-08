@@ -24,7 +24,6 @@ import io.vertx.core.shareddata.impl.ClusterSerializable;
 import org.apache.curator.RetryLoop;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.api.ACLBackgroundPathAndBytesable;
 import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
@@ -34,10 +33,7 @@ import org.apache.zookeeper.data.Stat;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -48,27 +44,28 @@ abstract class ZKMap<K, V> {
   final CuratorFramework curator;
   protected final Vertx vertx;
   final String mapPath;
+  protected final String mapName;
 
   static final String ZK_PATH_ASYNC_MAP = "asyncMap";
+  static final String ZK_PATH_ASYNC_MULTI_MAP = "asyncMultiMap";
+  static final String EVENTBUS_PATH = "/" + ZK_PATH_ASYNC_MULTI_MAP + "/__vertx.subs/";
   static final String ZK_PATH_SYNC_MAP = "syncMap";
-  static final Predicate<String> pathChecker = path -> {
-    Objects.requireNonNull(path, "zookeeper node path can not be null.");
-    if (path.contains("/")) throw new IllegalArgumentException("can not contain forward slash char in ZK node path");
-    return true;
-  };
 
-  private final RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
+  private RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
 
   ZKMap(CuratorFramework curator, Vertx vertx, String mapType, String mapName) {
     this.curator = curator;
     this.vertx = vertx;
-    pathChecker.test(mapName);
+    this.mapName = mapName;
     this.mapPath = "/" + mapType + "/" + mapName;
   }
 
   String keyPath(K k) {
-    pathChecker.test(k.toString());
     return mapPath + "/" + k.toString();
+  }
+
+  String valuePath(K k, Object v) {
+    return keyPath(k) + "/" + v.toString();
   }
 
   Future<Void> assertKeyIsNotNull(Object key) {
@@ -110,7 +107,6 @@ abstract class ZKMap<K, V> {
   }
 
   <T> T asObject(byte[] bytes) throws Exception {
-    if (bytes == null) return null; //TTL
     ByteArrayInputStream byteIn = new ByteArrayInputStream(bytes);
     DataInputStream in = new DataInputStream(byteIn);
     boolean isClusterSerializable = in.readBoolean();
@@ -228,12 +224,18 @@ abstract class ZKMap<K, V> {
   Future<Stat> create(String path, V v, Optional<Long> timeToLive) {
     Promise<Stat> future = Promise.promise();
     try {
-      ACLBackgroundPathAndBytesable<String> creator = timeToLive.isPresent()
-        ? curator.create().withTtl(timeToLive.get()).creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT_WITH_TTL)
-        : curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT);
-      creator.inBackground((cl, el) -> {
+      //there are two type of node - ephemeral and persistent.
+      //if path is 'asyncMultiMap/subs/' which save the data of eventbus address and serverID we could using ephemeral,
+      //since the lifecycle of this path as long as this verticle.
+      CreateMode nodeMode = path.contains(EVENTBUS_PATH) ? CreateMode.EPHEMERAL : CreateMode.PERSISTENT;
+      //as zk 3.5.x provide ttl node mode, we should consider it.
+      nodeMode = timeToLive.isPresent() ? CreateMode.PERSISTENT_WITH_TTL : nodeMode;
+      ProtectACLCreateModeStatPathAndBytesable<String> pathAndBytesable = timeToLive.isPresent()
+        ? curator.create().withTtl(timeToLive.get()).creatingParentsIfNeeded()
+        : curator.create().creatingParentsIfNeeded();
+      pathAndBytesable.withMode(nodeMode).inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
-          vertx.runOnContext(aVoid -> future.complete(el.getStat()));
+          vertx.runOnContext(event -> future.complete(el.getStat()));
         }
       }).forPath(path, asByte(v));
     } catch (Exception ex) {
