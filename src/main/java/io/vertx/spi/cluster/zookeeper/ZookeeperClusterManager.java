@@ -88,7 +88,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private ExecutorService lockReleaseExec;
 
   private Function<String, String> resolveNodeId = path -> {
-    String[] pathArr =  path.split("\\/");
+    String[] pathArr = path.split("\\/");
     return pathArr[pathArr.length - 1];
   };
 
@@ -115,16 +115,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   public ZookeeperClusterManager(JsonObject config) {
     this.conf = config;
-  }
-
-  //just for unit testing
-  ZookeeperClusterManager(RetryPolicy retryPolicy, CuratorFramework curator) {
-    Objects.requireNonNull(retryPolicy, "The retry policy cannot be null.");
-    Objects.requireNonNull(curator, "The Curator instance cannot be null.");
-    this.retryPolicy = retryPolicy;
-    this.curator = curator;
-    this.nodeId = UUID.randomUUID().toString();
-    this.customCuratorCluster = true;
   }
 
   private void loadProperties(String resourceLocation) {
@@ -251,7 +241,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     try {
       Buffer buffer = Buffer.buffer();
       nodeInfo.writeToBuffer(buffer);
-      curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c,e) -> {
+      curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
         if (e.getType() == CuratorEventType.SET_DATA || e.getType() == CuratorEventType.CREATE) {
           vertx.runOnContext(Avoid -> {
             localNodeInfo.put(nodeId, nodeInfo);
