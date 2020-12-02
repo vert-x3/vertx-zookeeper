@@ -1,5 +1,7 @@
 = Zookeeper Cluster Manager
 
+image:https://github.com/vert-x3/vertx-zookeeper/workflows/CI/badge.svg?branch=master["Build Status", link="https://github.com/vert-x3/vertx-zookeeper/actions?query=workflow%3ACI"]
+
 This is a cluster manager implementation for Vert.x that uses http://zookeeper.apache.org/[Zookeeper].
 
 Please see the main documentation on the web-site for a full description:
