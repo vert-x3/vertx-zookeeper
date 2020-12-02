@@ -13,7 +13,6 @@ import io.vertx.core.spi.cluster.RegistrationInfo;
 import io.vertx.core.spi.cluster.RegistrationUpdateEvent;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
-import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
@@ -47,6 +46,7 @@ public class SubsMapHelper implements TreeCacheListener {
     this.curator = curator;
     this.vertx = vertx;
     this.treeCache = new TreeCache(curator, VERTX_SUBS_NAME);
+    this.treeCache.getListenable().addListener(this);
     try {
       this.treeCache.start();
     } catch (Exception e) {
@@ -82,14 +82,12 @@ public class SubsMapHelper implements TreeCacheListener {
   }
 
   public List<RegistrationInfo> get(String address) {
-    return Optional.ofNullable(treeCache.getCurrentChildren(keyPath.apply(address))).map(data -> {
-      return data.values().stream().map(childData -> {
-        RegistrationInfo registrationInfo = new RegistrationInfo();
-        Buffer buffer = Buffer.buffer(childData.getData());
-        registrationInfo.readFromBuffer(0, buffer);
-        return registrationInfo;
-      }).collect(Collectors.toList());
-    }).orElse(new ArrayList<>());
+    return Optional.ofNullable(treeCache.getCurrentChildren(keyPath.apply(address))).map(data -> data.values().stream().map(childData -> {
+      RegistrationInfo registrationInfo = new RegistrationInfo();
+      Buffer buffer = Buffer.buffer(childData.getData());
+      registrationInfo.readFromBuffer(0, buffer);
+      return registrationInfo;
+    }).collect(Collectors.toList())).orElse(new ArrayList<>());
   }
 
   public void remove(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
@@ -117,7 +115,13 @@ public class SubsMapHelper implements TreeCacheListener {
       case NODE_ADDED:
       case NODE_UPDATED:
       case NODE_REMOVED:
-        String addr = event.getData().getPath().split("\\/", 3)[1];
+        // /__vertx.subs/AddressName/NodeId -> AddressName
+        String[] pathElements = event.getData().getPath().split("\\/", 4);
+        if (pathElements.length <= 3) {
+          // "/__vertx.subs" and "/__vertx.subs/XX" added event
+          break;
+        }
+        String addr = pathElements[2];
         vertx.<List<RegistrationInfo>>executeBlocking(prom -> {
           prom.complete(get(addr));
         }, false, ar -> {
