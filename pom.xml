@@ -14,8 +14,9 @@
 
   <properties>
     <stack.version>4.1.0-SNAPSHOT</stack.version>
-    <curator.version>4.3.0</curator.version>
-    <zookeeper.version>3.5.7</zookeeper.version>
+    <curator.version>5.1.0</curator.version>
+    <!-- same version as curator dependency but we want to exclude the netty parts -->
+    <zookeeper.version>3.6.0</zookeeper.version>
     <guava.version>27.0.1-jre</guava.version>
     <junit.version>4.13.1</junit.version>
     <slf4j.version>1.7.25</slf4j.version>
@@ -69,10 +70,10 @@
       <artifactId>curator-framework</artifactId>
       <version>${curator.version}</version>
       <exclusions>
-<!--        <exclusion>-->
-<!--          <groupId>org.apache.zookeeper</groupId>-->
-<!--          <artifactId>zookeeper</artifactId>-->
-<!--        </exclusion>-->
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>org.slf4j</groupId>
           <artifactId>slf4j-api</artifactId>
