@@ -36,6 +36,66 @@ public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
     zkClustered.stop();
   }
 
+  @Test
+  @Override
+  public void testMapReplaceIfPresentTtl() {
+    getVertx().sharedData().<String, String>getAsyncMap("foo",
+      onSuccess(map -> {
+        map.replaceIfPresent("key", "old", "new", 100)
+          .onSuccess(b -> fail("operation should not be implemented"))
+          .onFailure(t -> {
+            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            complete();
+          });
+      }));
+    await();
+  }
+
+  @Test
+  @Override
+  public void testMapReplaceIfPresentTtlWhenNotPresent() {
+    getVertx().sharedData().<String, String>getAsyncMap("foo",
+      onSuccess(map -> {
+        map.replaceIfPresent("key", "old", "new", 100)
+          .onSuccess(b -> fail("operation should not be implemented"))
+          .onFailure(t -> {
+            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            complete();
+          });
+      }));
+    await();
+  }
+
+  @Test
+  @Override
+  public void testMapReplaceTtl() {
+    getVertx().sharedData().<String, String>getAsyncMap("foo",
+      onSuccess(map -> {
+        map.replace("key", "new", 100)
+          .onSuccess(b -> fail("operation should not be implemented"))
+          .onFailure(t -> {
+            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            complete();
+          });
+      }));
+    await();
+  }
+
+  @Test
+  @Override
+  public void testMapReplaceTtlWithPreviousValue() {
+    getVertx().sharedData().<String, String>getAsyncMap("foo",
+      onSuccess(map -> {
+        map.replace("key", "new", 100)
+          .onSuccess(b -> fail("operation should not be implemented"))
+          .onFailure(t -> {
+            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            complete();
+          });
+      }));
+    await();
+  }
+
   @Override
   protected ClusterManager getClusterManager() {
     return zkClustered.getClusterManager();

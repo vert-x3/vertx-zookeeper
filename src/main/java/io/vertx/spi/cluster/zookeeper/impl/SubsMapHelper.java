@@ -13,6 +13,7 @@ import io.vertx.core.spi.cluster.RegistrationInfo;
 import io.vertx.core.spi.cluster.RegistrationUpdateEvent;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
+import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
@@ -21,10 +22,10 @@ import org.apache.zookeeper.CreateMode;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class SubsMapHelper implements TreeCacheListener {
 
@@ -34,13 +35,14 @@ public class SubsMapHelper implements TreeCacheListener {
   private final NodeSelector nodeSelector;
   private final String nodeId;
   private final ConcurrentMap<String, Set<RegistrationInfo>> ownSubs = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Set<RegistrationInfo>> localSubs = new ConcurrentHashMap<>();
 
   private static final String VERTX_SUBS_NAME = "/__vertx.subs";
   private static final Logger log = LoggerFactory.getLogger(SubsMapHelper.class);
 
-  private final Function<String, String> keyPath = address -> VERTX_SUBS_NAME + "/" + address;
-  private final Function<RegistrationInfo, String> valuePath = registrationInfo -> registrationInfo.nodeId() + "-" + registrationInfo.seq();
-  private final BiFunction<String, RegistrationInfo, String> fullPath = (address, registrationInfo) -> keyPath.apply(address) + "/" + valuePath.apply(registrationInfo);
+  private static final Function<String, String> keyPath = address -> VERTX_SUBS_NAME + "/" + address;
+  private static final Function<RegistrationInfo, String> valuePath = registrationInfo -> registrationInfo.nodeId() + "-" + registrationInfo.seq();
+  private static final BiFunction<String, RegistrationInfo, String> fullPath = (address, registrationInfo) -> keyPath.apply(address) + "/" + valuePath.apply(registrationInfo);
 
   public SubsMapHelper(CuratorFramework curator, VertxInternal vertx, NodeSelector nodeSelector, String nodeId) {
     this.curator = curator;
@@ -61,52 +63,82 @@ public class SubsMapHelper implements TreeCacheListener {
   }
 
   public void put(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
-    try {
-      Buffer buffer = Buffer.buffer();
-      registrationInfo.writeToBuffer(buffer);
-      curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
-        if (e.getType() == CuratorEventType.CREATE || e.getType() == CuratorEventType.SET_DATA) {
-          vertx.runOnContext(Avoid -> {
-            ownSubs.compute(address, (add, curr) -> {
-              Set<RegistrationInfo> res = curr != null ? curr : new CopyOnWriteArraySet<>();
-              res.add(registrationInfo);
-              return res;
+    if (registrationInfo.localOnly()) {
+      localSubs.compute(address, (add, curr) -> addToSet(registrationInfo, curr));
+      fireRegistrationUpdateEvent(address);
+      promise.complete();
+    } else {
+      try {
+        Buffer buffer = Buffer.buffer();
+        registrationInfo.writeToBuffer(buffer);
+        curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
+          if (e.getType() == CuratorEventType.CREATE || e.getType() == CuratorEventType.SET_DATA) {
+            vertx.runOnContext(Avoid -> {
+              ownSubs.compute(address, (add, curr) -> addToSet(registrationInfo, curr));
+              promise.complete();
             });
-            promise.complete();
-          });
-        }
-      }).withUnhandledErrorListener(log::error).forPath(fullPath.apply(address, registrationInfo), buffer.getBytes());
-    } catch (Exception e) {
-      log.error(String.format("create subs address %s failed.", address), e);
+          }
+        }).withUnhandledErrorListener(log::error).forPath(fullPath.apply(address, registrationInfo), buffer.getBytes());
+      } catch (Exception e) {
+        log.error(String.format("create subs address %s failed.", address), e);
+      }
     }
   }
 
+  private Set<RegistrationInfo> addToSet(RegistrationInfo registrationInfo, Set<RegistrationInfo> curr) {
+    Set<RegistrationInfo> res = curr != null ? curr : Collections.synchronizedSet(new LinkedHashSet<>());
+    res.add(registrationInfo);
+    return res;
+  }
+
   public List<RegistrationInfo> get(String address) {
-    return Optional.ofNullable(treeCache.getCurrentChildren(keyPath.apply(address))).map(data -> data.values().stream().map(childData -> {
-      RegistrationInfo registrationInfo = new RegistrationInfo();
-      Buffer buffer = Buffer.buffer(childData.getData());
-      registrationInfo.readFromBuffer(0, buffer);
-      return registrationInfo;
-    }).collect(Collectors.toList())).orElse(new ArrayList<>());
+    Stream<RegistrationInfo> localRegistrations = Optional.ofNullable(localSubs.get(address))
+      .map(Collection::stream)
+      .orElse(Stream.empty());
+
+    Stream<RegistrationInfo> remoteRegistrations = Optional
+      .ofNullable(treeCache.getCurrentChildren(keyPath.apply(address)))
+      .map(data -> data
+        .values()
+        .stream()
+        .map(SubsMapHelper::toRegistrationInfo)
+      ).orElse(Stream.empty());
+
+    return Stream.concat(localRegistrations, remoteRegistrations).collect(Collectors.toList());
+  }
+
+  private static RegistrationInfo toRegistrationInfo(ChildData childData) {
+    RegistrationInfo registrationInfo = new RegistrationInfo();
+    Buffer buffer = Buffer.buffer(childData.getData());
+    registrationInfo.readFromBuffer(0, buffer);
+    return registrationInfo;
   }
 
   public void remove(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
     try {
-      curator.delete().guaranteed().inBackground((c, e) -> {
-        if (e.getType() == CuratorEventType.DELETE) {
-          vertx.runOnContext(aVoid -> {
-            ownSubs.computeIfPresent(address, (add, curr) -> {
-              curr.remove(registrationInfo);
-              return curr.isEmpty() ? null : curr;
+      if (registrationInfo.localOnly()) {
+        localSubs.computeIfPresent(address, (add, curr) -> removeFromSet(registrationInfo, curr));
+        fireRegistrationUpdateEvent(address);
+        promise.complete();
+      } else {
+        curator.delete().guaranteed().inBackground((c, e) -> {
+          if (e.getType() == CuratorEventType.DELETE) {
+            vertx.runOnContext(aVoid -> {
+              ownSubs.computeIfPresent(address, (add, curr) -> removeFromSet(registrationInfo, curr));
+              promise.complete();
             });
-            promise.complete();
-          });
-        }
-      }).forPath(fullPath.apply(address, registrationInfo));
+          }
+        }).forPath(fullPath.apply(address, registrationInfo));
+      }
     } catch (Exception e) {
       log.error(String.format("remove subs address %s failed.", address), e);
       promise.fail(e);
     }
+  }
+
+  private Set<RegistrationInfo> removeFromSet(RegistrationInfo registrationInfo, Set<RegistrationInfo> curr) {
+    curr.remove(registrationInfo);
+    return curr.isEmpty() ? null : curr;
   }
 
   @Override
@@ -116,15 +148,13 @@ public class SubsMapHelper implements TreeCacheListener {
       case NODE_UPDATED:
       case NODE_REMOVED:
         // /__vertx.subs/AddressName/NodeId -> AddressName
-        String[] pathElements = event.getData().getPath().split("\\/", 4);
+        String[] pathElements = event.getData().getPath().split("/", 4);
         if (pathElements.length <= 3) {
           // "/__vertx.subs" and "/__vertx.subs/XX" added event
           break;
         }
         String addr = pathElements[2];
-        vertx.<List<RegistrationInfo>>executeBlocking(prom -> {
-          prom.complete(get(addr));
-        }, false, ar -> {
+        vertx.<List<RegistrationInfo>>executeBlocking(prom -> prom.complete(get(addr)), false, ar -> {
           if (ar.succeeded()) {
             nodeSelector.registrationsUpdated(new RegistrationUpdateEvent(addr, ar.result()));
           } else {
@@ -160,6 +190,10 @@ public class SubsMapHelper implements TreeCacheListener {
         });
         break;
     }
+  }
+
+  private void fireRegistrationUpdateEvent(String address) {
+    nodeSelector.registrationsUpdated(new RegistrationUpdateEvent(address, get(address)));
   }
 
 }

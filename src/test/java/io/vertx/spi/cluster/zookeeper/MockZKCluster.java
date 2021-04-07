@@ -2,24 +2,18 @@ package io.vertx.spi.cluster.zookeeper;
 
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.spi.cluster.ClusterManager;
-import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Stream.Liu
  */
 public class MockZKCluster {
-
-  private final RetryPolicy retryPolicy = new ExponentialBackoffRetry(2000, 1, 8000);
+  private final InstanceSpec spec = new InstanceSpec(null, -1, -1, -1, true, -1, 10000, 120);
   private TestingServer server;
   private final List<ZookeeperClusterManager> clusterManagers = new ArrayList<>();
 
@@ -29,7 +23,7 @@ public class MockZKCluster {
 
   public MockZKCluster() {
     try {
-      server = new TestingServer(new InstanceSpec(null, -1, -1, -1, true, -1, 10000, 120), true);
+      server = new TestingServer(spec, true);
     } catch (Exception e) {
       e.printStackTrace();
     }
@@ -53,7 +47,7 @@ public class MockZKCluster {
     try {
       clusterManagers.clear();
       if (server == null) {
-        server = new TestingServer(new InstanceSpec(null, -1, -1, -1, true, -1, 10000, 120), false);
+        server = new TestingServer(spec, false);
       }
       server.restart();
     } catch (Exception e) {
@@ -64,27 +58,14 @@ public class MockZKCluster {
   public ClusterManager getClusterManager() {
     if (server == null) {
       try {
-        server = new TestingServer(new InstanceSpec(null, -1, -1, -1, true, -1, 10000, 120), true);
+        server = new TestingServer(spec, true);
       } catch (Exception e) {
         e.printStackTrace();
       }
     }
-    String connectString = server.getConnectString();
-    curator = CuratorFrameworkFactory.builder()
-        .namespace("io.vertx")
-        .sessionTimeoutMs(3000)
-        .connectionTimeoutMs(2000)
-        .connectString(connectString)
-        .retryPolicy(retryPolicy).build();
-      curator.start();
-      try {
-        curator.blockUntilConnected(2, TimeUnit.SECONDS);
-      } catch (Exception e) {
-          e.printStackTrace();
-      }
-      String uuid = UUID.randomUUID().toString();
-      ZookeeperClusterManager zookeeperClusterManager = new ZookeeperClusterManager(curator, uuid);
-      clusterManagers.add(zookeeperClusterManager);
-      return zookeeperClusterManager;
+
+    ZookeeperClusterManager zookeeperClusterManager = new ZookeeperClusterManager(getDefaultConfig());
+    clusterManagers.add(zookeeperClusterManager);
+    return zookeeperClusterManager;
   }
 }
