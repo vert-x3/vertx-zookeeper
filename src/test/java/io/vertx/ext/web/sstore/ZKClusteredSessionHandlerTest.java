@@ -43,6 +43,4 @@ public class ZKClusteredSessionHandlerTest extends ClusteredSessionHandlerTest {
   public void testSessionExpires() {
 
   }
-
-
 }
