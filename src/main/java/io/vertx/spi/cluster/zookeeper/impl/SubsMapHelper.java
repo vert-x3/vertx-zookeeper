@@ -24,8 +24,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class SubsMapHelper implements TreeCacheListener {
 
@@ -92,19 +90,31 @@ public class SubsMapHelper implements TreeCacheListener {
   }
 
   public List<RegistrationInfo> get(String address) {
-    Stream<RegistrationInfo> localRegistrations = Optional.ofNullable(localSubs.get(address))
-      .map(Collection::stream)
-      .orElse(Stream.empty());
+    Map<String, ChildData> map = treeCache.getCurrentChildren(keyPath.apply(address));
+    Collection<ChildData> remote = (map == null) ? Collections.emptyList() : map.values();
 
-    Stream<RegistrationInfo> remoteRegistrations = Optional
-      .ofNullable(treeCache.getCurrentChildren(keyPath.apply(address)))
-      .map(data -> data
-        .values()
-        .stream()
-        .map(SubsMapHelper::toRegistrationInfo)
-      ).orElse(Stream.empty());
-
-    return Stream.concat(localRegistrations, remoteRegistrations).collect(Collectors.toList());
+    List<RegistrationInfo> list;
+    int size;
+    size = remote.size();
+    Set<RegistrationInfo> local = localSubs.get(address);
+    if (local != null) {
+      synchronized (local) {
+        size += local.size();
+        if (size == 0) {
+          return Collections.emptyList();
+        }
+        list = new ArrayList<>(size);
+        list.addAll(local);
+      }
+    } else if (size == 0) {
+      return Collections.emptyList();
+    } else {
+      list = new ArrayList<>(size);
+    }
+    for (ChildData childData : remote) {
+      list.add(toRegistrationInfo(childData));
+    }
+    return list;
   }
 
   private static RegistrationInfo toRegistrationInfo(ChildData childData) {
