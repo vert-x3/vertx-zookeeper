@@ -18,8 +18,8 @@
     <zookeeper.version>3.5.9</zookeeper.version>
     <guava.version>30.1.1-jre</guava.version>
     <junit.version>4.13.1</junit.version>
-    <slf4j.version>1.7.25</slf4j.version>
-    <log4j.version>1.2.17</log4j.version>
+    <slf4j.version>1.7.21</slf4j.version>
+    <log4j2.version>2.17.1</log4j2.version>
     <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
     <jar.manifest>${project.basedir}/src/main/resources/META-INF/MANIFEST.MF</jar.manifest>
   </properties>
@@ -143,14 +143,14 @@
       <version>${slf4j.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-log4j12</artifactId>
-      <version>${slf4j.version}</version>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <version>${log4j2.version}</version>
     </dependency>
     <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
-      <version>${log4j.version}</version>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <version>${log4j2.version}</version>
     </dependency>
 
     <dependency>
