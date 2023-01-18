@@ -16,7 +16,6 @@
     <stack.version>4.4.0-SNAPSHOT</stack.version>
     <curator.version>4.3.0</curator.version>
     <zookeeper.version>3.5.9</zookeeper.version>
-    <guava.version>30.1.1-jre</guava.version>
     <junit.version>4.13.1</junit.version>
     <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
     <jar.manifest>${project.basedir}/src/main/resources/META-INF/MANIFEST.MF</jar.manifest>
@@ -131,7 +130,6 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
-      <version>${guava.version}</version>
     </dependency>
 
     <!-- ZK requires these dependencies: declare this dependency to force this module to use this one. These are the versions used by vert.x -->
