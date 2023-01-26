@@ -14,9 +14,9 @@
 
   <properties>
     <stack.version>4.4.0-SNAPSHOT</stack.version>
-    <curator.version>4.3.0</curator.version>
-    <zookeeper.version>3.5.9</zookeeper.version>
-    <junit.version>4.13.1</junit.version>
+    <curator.version>5.4.0</curator.version>
+    <zookeeper.version>3.7.1</zookeeper.version>
+    <junit.version>5.6.2</junit.version>
     <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
     <jar.manifest>${project.basedir}/src/main/resources/META-INF/MANIFEST.MF</jar.manifest>
   </properties>
@@ -150,8 +150,14 @@
     </dependency>
 
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.vintage</groupId>
+      <artifactId>junit-vintage-engine</artifactId>
       <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
