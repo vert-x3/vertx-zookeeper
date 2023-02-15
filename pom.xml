@@ -15,13 +15,13 @@
       
     <artifactId>vertx-zookeeper</artifactId>
       
-    <version>3.9.15-SNAPSHOT</version>
+    <version>3.9.15</version>
       
     <name>Vert.x Zookeeper Cluster Manager</name>
       
     <properties>
             
-        <stack.version>3.9.15-SNAPSHOT</stack.version>
+        <stack.version>3.9.15</stack.version>
             
         <curator.version>2.13.0</curator.version>
             
