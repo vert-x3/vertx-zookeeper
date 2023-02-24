@@ -136,17 +136,35 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private InputStream getConfigStream(String resourceLocation) throws FileNotFoundException {
     ClassLoader ctxClsLoader = Thread.currentThread().getContextClassLoader();
-    InputStream is = null;
-    if (ctxClsLoader != null) {
-      is = ctxClsLoader.getResourceAsStream(resourceLocation);
-    }
-    if (is == null && !resourceLocation.equals(CONFIG_FILE)) {
-      is = new FileInputStream(resourceLocation);
-    } else if (is == null && resourceLocation.equals(CONFIG_FILE)) {
-      is = getClass().getClassLoader().getResourceAsStream(resourceLocation);
-      if (is == null) {
-        is = getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILE);
+    InputStream is           = null;
+    if (resourceLocation.startsWith("classpath:")) {
+      resourceLocation = resourceLocation.substring(10);
+      if (ctxClsLoader != null) {
+        is = ctxClsLoader.getResourceAsStream(resourceLocation);
       }
+      if (is == null && !resourceLocation.equals(CONFIG_FILE)) {
+        is = new FileInputStream(resourceLocation);
+      } else if (is == null && resourceLocation.equals(CONFIG_FILE)) {
+        is = getClass().getClassLoader().getResourceAsStream(resourceLocation);
+        if (is == null) {
+          is = getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILE);
+        }
+      }
+    } else {
+      try {
+        is = new FileInputStream(resourceLocation);
+      } catch (FileNotFoundException fileEx) {
+        if (ctxClsLoader != null) {
+          is = ctxClsLoader.getResourceAsStream(resourceLocation);
+        }
+        if (is == null && resourceLocation.equals(CONFIG_FILE)) {
+          is = getClass().getClassLoader().getResourceAsStream(resourceLocation);
+          if (is == null) {
+            is = getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILE);
+          }
+        }
+      }
+
     }
     return is;
   }
