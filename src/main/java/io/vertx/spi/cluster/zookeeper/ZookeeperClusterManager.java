@@ -16,7 +16,11 @@
 
 package io.vertx.spi.cluster.zookeeper;
 
-import io.vertx.core.*;
+import io.vertx.core.CompositeFuture;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxException;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.impl.logging.Logger;
@@ -25,8 +29,17 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.Counter;
 import io.vertx.core.shareddata.Lock;
-import io.vertx.core.spi.cluster.*;
-import io.vertx.spi.cluster.zookeeper.impl.*;
+import io.vertx.core.spi.cluster.ClusterManager;
+import io.vertx.core.spi.cluster.NodeInfo;
+import io.vertx.core.spi.cluster.NodeListener;
+import io.vertx.core.spi.cluster.NodeSelector;
+import io.vertx.core.spi.cluster.RegistrationInfo;
+import io.vertx.spi.cluster.zookeeper.impl.ConfigUtil;
+import io.vertx.spi.cluster.zookeeper.impl.SubsMapHelper;
+import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMap;
+import io.vertx.spi.cluster.zookeeper.impl.ZKCounter;
+import io.vertx.spi.cluster.zookeeper.impl.ZKLock;
+import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -40,8 +53,12 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
-import java.io.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -76,9 +93,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private final Map<String, ZKLock> locks = new ConcurrentHashMap<>();
   private final Map<String, AsyncMap<?, ?>> asyncMapCache = new ConcurrentHashMap<>();
 
-  private static final String DEFAULT_CONFIG_FILE = "default-zookeeper.json";
-  private static final String CONFIG_FILE = "zookeeper.json";
-  private static final String ZK_SYS_CONFIG_KEY = "vertx.zookeeper.config";
   private JsonObject conf = new JsonObject();
 
   private static final String ZK_PATH_LOCKS = "/locks/";
@@ -93,8 +107,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   };
 
   public ZookeeperClusterManager() {
-    String resourceLocation = System.getProperty(ZK_SYS_CONFIG_KEY, CONFIG_FILE);
-    loadProperties(resourceLocation);
+    conf = ConfigUtil.loadConfig(null);
   }
 
   public ZookeeperClusterManager(CuratorFramework curator) {
@@ -102,7 +115,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   public ZookeeperClusterManager(String resourceLocation) {
-    loadProperties(resourceLocation);
+    conf = ConfigUtil.loadConfig(resourceLocation);
   }
 
   public ZookeeperClusterManager(CuratorFramework curator, String nodeId) {
@@ -115,40 +128,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   public ZookeeperClusterManager(JsonObject config) {
     this.conf = config;
-  }
-
-  private void loadProperties(String resourceLocation) {
-    try {
-      BufferedReader reader = new BufferedReader(new InputStreamReader(new BufferedInputStream(getConfigStream(resourceLocation))));
-      String line;
-      StringBuilder sb = new StringBuilder();
-      while ((line = reader.readLine()) != null) {
-        sb.append(line);
-      }
-      conf = new JsonObject(sb.toString());
-      log.info("Loaded zookeeper.json file from resourceLocation=" + resourceLocation);
-    } catch (FileNotFoundException e) {
-      log.error("Could not find zookeeper config file", e);
-    } catch (IOException e) {
-      log.error("Failed to load zookeeper config", e);
-    }
-  }
-
-  private InputStream getConfigStream(String resourceLocation) throws FileNotFoundException {
-    ClassLoader ctxClsLoader = Thread.currentThread().getContextClassLoader();
-    InputStream is = null;
-    if (ctxClsLoader != null) {
-      is = ctxClsLoader.getResourceAsStream(resourceLocation);
-    }
-    if (is == null && !resourceLocation.equals(CONFIG_FILE)) {
-      is = new FileInputStream(resourceLocation);
-    } else if (is == null && resourceLocation.equals(CONFIG_FILE)) {
-      is = getClass().getClassLoader().getResourceAsStream(resourceLocation);
-      if (is == null) {
-        is = getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILE);
-      }
-    }
-    return is;
   }
 
   public void setConfig(JsonObject conf) {
