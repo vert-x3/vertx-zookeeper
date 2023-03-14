@@ -15,7 +15,7 @@ public class Examples {
   public void example1() {
     ClusterManager mgr = new ZookeeperClusterManager();
     VertxOptions options = new VertxOptions().setClusterManager(mgr);
-    Vertx.clusteredVertx(options, res -> {
+    Vertx.clusteredVertx(options).onComplete(res -> {
       if (res.succeeded()) {
         Vertx vertx = res.result();
       } else {
@@ -36,7 +36,7 @@ public class Examples {
     ClusterManager mgr = new ZookeeperClusterManager(zkConfig);
     VertxOptions options = new VertxOptions().setClusterManager(mgr);
 
-    Vertx.clusteredVertx(options, res -> {
+    Vertx.clusteredVertx(options).onComplete(res -> {
       if (res.succeeded()) {
         Vertx vertx = res.result();
       } else {
@@ -48,7 +48,7 @@ public class Examples {
   public void example3(CuratorFramework curator) {
     ClusterManager mgr = new ZookeeperClusterManager(curator);
     VertxOptions options = new VertxOptions().setClusterManager(mgr);
-    Vertx.clusteredVertx(options, res -> {
+    Vertx.clusteredVertx(options).onComplete(res -> {
       if (res.succeeded()) {
         Vertx vertx = res.result();
       } else {
