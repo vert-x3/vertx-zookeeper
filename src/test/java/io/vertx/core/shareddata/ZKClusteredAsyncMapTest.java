@@ -39,8 +39,7 @@ public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
   @Test
   @Override
   public void testMapReplaceIfPresentTtl() {
-    getVertx().sharedData().<String, String>getAsyncMap("foo",
-      onSuccess(map -> {
+    getVertx().sharedData().<String, String>getAsyncMap("foo").onComplete(onSuccess(map -> {
         map.replaceIfPresent("key", "old", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
@@ -54,8 +53,7 @@ public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
   @Test
   @Override
   public void testMapReplaceIfPresentTtlWhenNotPresent() {
-    getVertx().sharedData().<String, String>getAsyncMap("foo",
-      onSuccess(map -> {
+    getVertx().sharedData().<String, String>getAsyncMap("foo").onComplete(onSuccess(map -> {
         map.replaceIfPresent("key", "old", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
@@ -69,8 +67,7 @@ public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
   @Test
   @Override
   public void testMapReplaceTtl() {
-    getVertx().sharedData().<String, String>getAsyncMap("foo",
-      onSuccess(map -> {
+    getVertx().sharedData().<String, String>getAsyncMap("foo").onComplete(onSuccess(map -> {
         map.replace("key", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
@@ -84,8 +81,7 @@ public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
   @Test
   @Override
   public void testMapReplaceTtlWithPreviousValue() {
-    getVertx().sharedData().<String, String>getAsyncMap("foo",
-      onSuccess(map -> {
+    getVertx().sharedData().<String, String>getAsyncMap("foo").onComplete(onSuccess(map -> {
         map.replace("key", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
@@ -103,8 +99,8 @@ public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
 
   @Test
   public void testStoreAndGetBuffer() {
-    getVertx().sharedData().<String, Buffer>getAsyncMap("foo", onSuccess(map -> {
-      map.put("test", Buffer.buffer().appendString("Hello"), onSuccess(putResult -> map.get("test", onSuccess(myBuffer -> {
+    getVertx().sharedData().<String, Buffer>getAsyncMap("foo").onComplete(onSuccess(map -> {
+      map.put("test", Buffer.buffer().appendString("Hello")).onComplete(onSuccess(putResult -> map.get("test").onComplete(onSuccess(myBuffer -> {
         assertEquals("Hello", myBuffer.toString());
         testComplete();
       }))));

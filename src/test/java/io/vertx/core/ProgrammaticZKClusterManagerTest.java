@@ -44,10 +44,10 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     mgr.setConfig(config);
     assertEquals(config, mgr.getConfig());
     VertxOptions options = new VertxOptions().setClusterManager(mgr);
-    Vertx.clusteredVertx(options, res -> {
+    Vertx.clusteredVertx(options).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr.getCuratorFramework());
-      res.result().close(res2 -> {
+      res.result().close().onComplete(res2 -> {
         assertTrue(res2.succeeded());
         testComplete();
       });
@@ -105,7 +105,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options1, res -> {
+    Vertx.clusteredVertx(options1).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr1.getCuratorFramework());
       res.result().eventBus().consumer("news", message -> {
@@ -118,11 +118,11 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() != null);
 
-    Vertx.clusteredVertx(options2, res -> {
+    Vertx.clusteredVertx(options2).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr2.getCuratorFramework());
       vertx2.set(res.result());
-      res.result().eventBus().request("news", "hello", ar -> {
+      res.result().eventBus().request("news", "hello").onComplete(ar -> {
         assertTrue(ar.succeeded());
         testComplete();
       });
@@ -130,8 +130,8 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     await();
 
-    vertx1.get().close(ar -> vertx1.set(null));
-    vertx2.get().close(ar -> vertx2.set(null));
+    vertx1.get().close().onComplete(ar -> vertx1.set(null));
+    vertx2.get().close().onComplete(ar -> vertx2.set(null));
 
     assertTrue(curator1.getState() == CuratorFrameworkState.STARTED);
     assertTrue(curator2.getState() == CuratorFrameworkState.STARTED);
@@ -168,11 +168,11 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options1, res -> {
+    Vertx.clusteredVertx(options1).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr1.getCuratorFramework());
-      res.result().sharedData().getClusterWideMap("mymap1", ar -> {
-        ar.result().put("news", "hello", v -> {
+      res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
+        ar.result().put("news", "hello").onComplete(v -> {
           vertx1.set(res.result());
         });
       });
@@ -180,12 +180,12 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() != null);
 
-    Vertx.clusteredVertx(options2, res -> {
+    Vertx.clusteredVertx(options2).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr2.getCuratorFramework());
       vertx2.set(res.result());
-      res.result().sharedData().getClusterWideMap("mymap1", ar -> {
-        ar.result().get("news", r -> {
+      res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
+        ar.result().get("news").onComplete(r -> {
           assertEquals("hello", r.result());
           testComplete();
         });
@@ -194,8 +194,8 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     await();
 
-    vertx1.get().close(ar -> vertx1.set(null));
-    vertx2.get().close(ar -> vertx2.set(null));
+    vertx1.get().close().onComplete(ar -> vertx1.set(null));
+    vertx2.get().close().onComplete(ar -> vertx2.set(null));
 
     assertWaitUntil(() -> vertx1.get() == null && vertx2.get() == null);
 
@@ -223,11 +223,11 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options, res -> {
+    Vertx.clusteredVertx(options).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr.getCuratorFramework());
-      res.result().sharedData().getClusterWideMap("mymap1", ar -> {
-        ar.result().put("news", "hello", v -> {
+      res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
+        ar.result().put("news", "hello").onComplete(v -> {
           vertx1.set(res.result());
         });
       });
@@ -251,7 +251,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> mgr.getNodes().size() == size - 1);
     vertx1.get().close();
-    vertx1.get().close(ar -> vertx1.set(null));
+    vertx1.get().close().onComplete(ar -> vertx1.set(null));
 
     assertWaitUntil(() -> vertx1.get() == null);
   }
@@ -293,11 +293,11 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options1, res -> {
+    Vertx.clusteredVertx(options1).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr1.getCuratorFramework());
-      res.result().sharedData().getClusterWideMap("mymap1", ar -> {
-        ar.result().put("news", "hello", v -> {
+      res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
+        ar.result().put("news", "hello").onComplete(v -> {
           vertx1.set(res.result());
         });
       });
@@ -305,12 +305,12 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() != null);
 
-    Vertx.clusteredVertx(options2, res -> {
+    Vertx.clusteredVertx(options2).onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr2.getCuratorFramework());
       vertx2.set(res.result());
-      res.result().sharedData().getClusterWideMap("mymap1", ar -> {
-        ar.result().get("news", r -> {
+      res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
+        ar.result().get("news").onComplete(r -> {
           assertEquals("hello", r.result());
           testComplete();
         });
@@ -319,8 +319,8 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     await();
 
-    vertx1.get().close(ar -> vertx1.set(null));
-    vertx2.get().close(ar -> vertx2.set(null));
+    vertx1.get().close().onComplete(ar -> vertx1.set(null));
+    vertx2.get().close().onComplete(ar -> vertx2.set(null));
 
     assertWaitUntil(() -> vertx1.get() == null && vertx2.get() == null);
 
