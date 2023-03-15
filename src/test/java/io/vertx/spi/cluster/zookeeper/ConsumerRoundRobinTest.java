@@ -28,7 +28,7 @@ public class ConsumerRoundRobinTest extends VertxTestBase {
     CompletableFuture<Void> future = new CompletableFuture<>();
     vertices[0].eventBus().
         consumer(MESSAGE_ADDRESS, message -> message.reply(index)).
-        completionHandler(event -> {
+        completion().onComplete(event -> {
           if (event.succeeded()) {
             future.complete(null);
           } else {
@@ -59,7 +59,7 @@ public class ConsumerRoundRobinTest extends VertxTestBase {
     AtomicInteger counter = new AtomicInteger(0);
     Set<Integer> results = new HashSet<>();
     Vertx vertx = vertices[0];
-    vertx.setPeriodic(500, aLong -> vertx.eventBus().request(MESSAGE_ADDRESS, "Hi", message -> {
+    vertx.setPeriodic(500, aLong -> vertx.eventBus().request(MESSAGE_ADDRESS, "Hi").onComplete(message -> {
       if (message.failed()) {
         fail(message.cause());
       } else {

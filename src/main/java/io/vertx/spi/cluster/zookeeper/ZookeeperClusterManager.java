@@ -150,11 +150,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public <K, V> void getAsyncMap(String name, Promise<AsyncMap<K, V>> promise) {
-    vertx.executeBlocking(prom -> {
+    vertx.<AsyncMap<K, V>>executeBlocking(prom -> {
       @SuppressWarnings("unchecked")
       AsyncMap<K, V> zkAsyncMap = (AsyncMap<K, V>) asyncMapCache.computeIfAbsent(name, key -> new ZKAsyncMap<>(vertx, curator, name));
       prom.complete(zkAsyncMap);
-    }, promise);
+    }).onComplete(promise);
   }
 
   @Override
@@ -164,7 +164,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getLockWithTimeout(String name, long timeout, Promise<Lock> promise) {
-    vertx.executeBlocking(prom -> {
+    vertx.<Lock>executeBlocking(prom -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
         InterProcessSemaphoreMutex mutexLock = new InterProcessSemaphoreMutex(curator, ZK_PATH_LOCKS + name);
@@ -180,19 +180,19 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       } catch (Exception e) {
         throw new VertxException("get lock exception", e);
       }
-    }, false, promise);
+    }, false).onComplete(promise);
   }
 
   @Override
   public void getCounter(String name, Promise<Counter> promise) {
-    vertx.executeBlocking(future -> {
+    vertx.<Counter>executeBlocking(future -> {
       try {
         Objects.requireNonNull(name);
         future.complete(new ZKCounter(vertx, curator, name, retryPolicy));
       } catch (Exception e) {
         future.fail(new VertxException(e));
       }
-    }, promise);
+    }).onComplete(promise);
   }
 
   @Override
@@ -240,7 +240,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getNodeInfo(String nodeId, Promise<NodeInfo> promise) {
-    vertx.executeBlocking(prom -> {
+    vertx.<NodeInfo>executeBlocking(prom -> {
       prom.complete(Optional.ofNullable(clusterNodes.getCurrentData(ZK_PATH_CLUSTER_NODE + nodeId))
         .map(childData -> {
           Buffer buffer = Buffer.buffer(childData.getData());
@@ -248,7 +248,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           nodeInfo.readFromBuffer(0, buffer);
           return nodeInfo;
         }).orElseThrow(() -> new VertxException("Not a member of the cluster")));
-    }, false, promise);
+    }, false).onComplete(promise);
   }
 
   private void addLocalNodeId() throws VertxException {
@@ -276,7 +276,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void join(Promise<Void> promise) {
-    vertx.executeBlocking(prom -> {
+    vertx.<Void>executeBlocking(prom -> {
       if (!active) {
         active = true;
         lockReleaseExec = Executors.newCachedThreadPool(r -> new Thread(r, "vertx-zookeeper-service-release-lock-thread"));
@@ -332,12 +332,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       } else {
         prom.complete();
       }
-    }, promise);
+    }).onComplete(promise);
   }
 
   @Override
   public void leave(Promise<Void> promise) {
-    vertx.executeBlocking(prom -> {
+    vertx.<Void>executeBlocking(prom -> {
       synchronized (ZookeeperClusterManager.this) {
         if (active) {
           active = false;
@@ -354,7 +354,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
           }
         } else prom.complete();
       }
-    }, promise);
+    }).onComplete(promise);
   }
 
   @Override
@@ -374,9 +374,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getRegistrations(String address, Promise<List<RegistrationInfo>> promise) {
-    vertx.executeBlocking(prom -> {
+    vertx.<List<RegistrationInfo>>executeBlocking(prom -> {
       prom.complete(subsMapHelper.get(address));
-    }, false, promise);
+    }, false).onComplete(promise);
   }
 
   @Override
