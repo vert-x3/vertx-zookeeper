@@ -110,7 +110,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   public Future<V> remove(K k) {
     return assertKeyIsNotNull(k).compose(aVoid -> {
       Promise<V> promise = Promise.promise();
-      get(k, promise);
+      get(k).onComplete(promise);
       return promise.future();
     }).compose(value -> {
       Promise<V> promise = Promise.promise();
@@ -128,7 +128,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> {
         Promise<V> promise = Promise.promise();
-        get(k, promise);
+        get(k).onComplete(promise);
         return promise.future();
       })
       .compose(value -> {
@@ -150,7 +150,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> {
         Promise<V> innerPromise = Promise.promise();
-        vertx.executeBlocking(future -> {
+        vertx.<V>executeBlocking(future -> {
           long startTime = Instant.now().toEpochMilli();
           int retries = 0;
 
@@ -173,7 +173,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
               return;
             }
           }
-        }, false, innerPromise);
+        }, false).onComplete(innerPromise);
         return innerPromise.future();
       });
   }
@@ -185,7 +185,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       .compose(aVoid -> assertValueIsNotNull(newValue))
       .compose(aVoid -> {
         Promise<Boolean> innerPromise = Promise.promise();
-        vertx.executeBlocking(future -> {
+        vertx.<Boolean>executeBlocking(future -> {
           long startTime = Instant.now().toEpochMilli();
           int retries = 0;
 
@@ -207,7 +207,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
               return;
             }
           }
-        }, false, innerPromise);
+        }, false).onComplete(innerPromise);
         return innerPromise.future();
       });
   }
@@ -259,12 +259,12 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   @Override
   public Future<List<V>> values() {
     Promise<Set<K>> keysPromise = ((VertxInternal)vertx).getOrCreateContext().promise();
-    keys(keysPromise);
+    keys().onComplete(keysPromise);
     return keysPromise.future().compose(keys -> {
       List<Future> futures = new ArrayList<>(keys.size());
       for (K k : keys) {
         Promise valuePromise = Promise.promise();
-        get(k, valuePromise);
+        get(k).onComplete(valuePromise);
         futures.add(valuePromise.future());
       }
       return CompositeFuture.all(futures).map(compositeFuture -> {
@@ -280,12 +280,12 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
   @Override
   public Future<Map<K, V>> entries() {
     Promise<Set<K>> keysPromise = ((VertxInternal)vertx).getOrCreateContext().promise();
-    keys(keysPromise);
+    keys().onComplete(keysPromise);
     return keysPromise.future().map(ArrayList::new).compose(keys -> {
       List<Future> futures = new ArrayList<>(keys.size());
       for (K k : keys) {
         Promise valuePromise = Promise.promise();
-        get(k, valuePromise);
+        get(k).onComplete(valuePromise);
         futures.add(valuePromise.future());
       }
       return CompositeFuture.all(futures).map(compositeFuture -> {

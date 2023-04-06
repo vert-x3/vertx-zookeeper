@@ -103,7 +103,7 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
     reg.completionHandler(ar -> {
       assertTrue(ar.succeeded());
       vertices[1].setTimer(200L, along -> {
-        vertices[0].eventBus().request(ADDRESS1, str, onSuccess((Message<R> reply) -> {
+        vertices[0].eventBus().<R>request(ADDRESS1, str).onComplete(onSuccess((Message<R> reply) -> {
           if (consumer == null) {
             assertTrue(reply.isSend());
             assertEquals(received, reply.body());
