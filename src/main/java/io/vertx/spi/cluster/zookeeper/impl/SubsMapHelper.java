@@ -19,6 +19,7 @@ import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 import org.apache.zookeeper.CreateMode;
 
+import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -131,6 +132,20 @@ public class SubsMapHelper implements TreeCacheListener {
         fireRegistrationUpdateEvent(address);
         promise.complete();
       } else {
+        //-> @wjw_add 删除指令来的早了,节点还不存在,只时候重试几次!
+        int retryCount=0;
+        org.apache.zookeeper.data.Stat stat = curator.checkExists().forPath(fullPath.apply(address, registrationInfo));
+        while(stat==null && retryCount<3) {
+          log.warn(MessageFormat.format("要删除的Zookeeper节点不存在:{0}, 重试第:{1}次!", fullPath.apply(address, registrationInfo), retryCount));
+          java.util.concurrent.TimeUnit.SECONDS.sleep(1);
+          retryCount++;
+          stat = curator.checkExists().forPath(fullPath.apply(address, registrationInfo));
+        }
+        if(stat==null) {
+          log.warn(MessageFormat.format("重试几次后,要删除的Zookeeper节点还不存在:{0}", fullPath.apply(address, registrationInfo)));
+        }
+        //<- @wjw_add
+        
         curator.delete().guaranteed().inBackground((c, e) -> {
           if (e.getType() == CuratorEventType.DELETE) {
             vertx.runOnContext(aVoid -> {
