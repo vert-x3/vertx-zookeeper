@@ -144,18 +144,21 @@ public class SubsMapHelper implements TreeCacheListener {
                 vertx.cancelTimer(timerID);
                 curator.delete().guaranteed().forPath(nodeFullPath);
                 log.warn(MessageFormat.format("重试第:{0}次后,成功删除Zookeeper节点:{1}", retryCount.get(), nodeFullPath));
+                promise.complete();
                 return;
               }
+              
               if (retryCount.get() > 10) {
                 vertx.cancelTimer(timerID);
-                log.warn(MessageFormat.format("重试{0}次后,要删除的Zookeeper节点还不存在:{1}", retryCount.get(), nodeFullPath));
+                String errMessage = MessageFormat.format("重试{0}次后,要删除的Zookeeper节点还不存在:{1}", retryCount.get(), nodeFullPath);
+                log.warn(errMessage);
+                promise.fail(errMessage);
               }
             } catch (Exception e) {
               log.error(String.format("remove subs address %s failed.", nodeFullPath), e);
             }
           });
 
-          promise.complete();
           return;
         }
         //<- @wjw_add
