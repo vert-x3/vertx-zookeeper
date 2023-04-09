@@ -152,10 +152,11 @@ public class SubsMapHelper implements TreeCacheListener {
                 vertx.cancelTimer(timerID);
                 String errMessage = MessageFormat.format("重试{0}次后,要删除的Zookeeper节点还不存在:{1}", retryCount.get(), nodeFullPath);
                 log.warn(errMessage);
-                promise.fail(errMessage);
+                throw new IllegalStateException(errMessage); 
               }
             } catch (Exception e) {
-              log.error(String.format("remove subs address %s failed.", nodeFullPath), e);
+              log.error(e.getMessage(), e);
+              promise.fail(e);
             }
           });
 
