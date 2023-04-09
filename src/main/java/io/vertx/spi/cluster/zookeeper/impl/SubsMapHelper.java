@@ -132,18 +132,31 @@ public class SubsMapHelper implements TreeCacheListener {
         fireRegistrationUpdateEvent(address);
         promise.complete();
       } else {
-        //-> @wjw_add 删除指令来的早了,节点还不存在,只时候重试几次!
+        //-> @wjw_add 删除指令来的早了,节点还不存在,这时候重试几次!
         //@wjw_comment: 为何不用Watcher来监听?因为可能在创建Watcher的时候节点已经创建了,就监听不到了!
-        int retryCount=0;
-        org.apache.zookeeper.data.Stat stat = curator.checkExists().forPath(fullPath.apply(address, registrationInfo));
-        while(stat==null && retryCount<3) {
-          log.warn(MessageFormat.format("要删除的Zookeeper节点不存在:{0}, 重试第:{1}次!", fullPath.apply(address, registrationInfo), retryCount));
-          java.util.concurrent.TimeUnit.SECONDS.sleep(1);
-          retryCount++;
-          stat = curator.checkExists().forPath(fullPath.apply(address, registrationInfo));
-        }
-        if(stat==null) {
-          log.warn(MessageFormat.format("重试几次后,要删除的Zookeeper节点还不存在:{0}", fullPath.apply(address, registrationInfo)));
+        String nodeFullPath = fullPath.apply(address, registrationInfo);
+        if (curator.checkExists().forPath(nodeFullPath) == null) {
+          java.util.concurrent.atomic.AtomicInteger retryCount = new java.util.concurrent.atomic.AtomicInteger(0);
+          vertx.setPeriodic(100, 100, timerID -> {
+            try {
+              log.warn(MessageFormat.format("要删除的Zookeeper节点不存在:{0}, 重试第:{1}次!", nodeFullPath, retryCount.incrementAndGet()));
+              if (curator.checkExists().forPath(nodeFullPath) != null) {
+                vertx.cancelTimer(timerID);
+                curator.delete().guaranteed().forPath(nodeFullPath);
+                log.warn(MessageFormat.format("重试第:{0}次后,成功删除Zookeeper节点:{1}", retryCount.get(), nodeFullPath));
+                return;
+              }
+              if (retryCount.get() > 10) {
+                vertx.cancelTimer(timerID);
+                log.warn(MessageFormat.format("重试{0}次后,要删除的Zookeeper节点还不存在:{1}", retryCount.get(), nodeFullPath));
+              }
+            } catch (Exception e) {
+              log.error(String.format("remove subs address %s failed.", nodeFullPath), e);
+            }
+          });
+
+          promise.complete();
+          return;
         }
         //<- @wjw_add
         
