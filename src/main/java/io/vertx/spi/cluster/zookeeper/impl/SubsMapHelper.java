@@ -133,6 +133,7 @@ public class SubsMapHelper implements TreeCacheListener {
         promise.complete();
       } else {
         //-> @wjw_add 删除指令来的早了,节点还不存在,只时候重试几次!
+        //@wjw_comment: 为何不用Watcher来监听?因为可能在创建Watcher的时候节点已经创建了,就监听不到了!
         int retryCount=0;
         org.apache.zookeeper.data.Stat stat = curator.checkExists().forPath(fullPath.apply(address, registrationInfo));
         while(stat==null && retryCount<3) {
