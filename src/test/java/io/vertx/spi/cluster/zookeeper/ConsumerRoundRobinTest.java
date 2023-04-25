@@ -29,7 +29,7 @@ public class ConsumerRoundRobinTest extends VertxTestBase {
     CompletableFuture<Void> future = new CompletableFuture<>();
     vertices[0].eventBus().
         consumer(MESSAGE_ADDRESS, message -> message.reply(index)).
-        completionHandler(event -> {
+        completion().onComplete(event -> {
           if (event.succeeded()) {
             future.complete(null);
           } else {

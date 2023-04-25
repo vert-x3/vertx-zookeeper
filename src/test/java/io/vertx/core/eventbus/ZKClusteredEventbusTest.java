@@ -73,7 +73,7 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
       }
       testComplete();
     });
-    reg.completionHandler(ar -> {
+    reg.completion().onComplete(ar -> {
       assertTrue(ar.succeeded());
       vertices[1].setTimer(200L, along -> {
         if (options == null) {
@@ -100,7 +100,7 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
         msg.reply(val, options);
       }
     });
-    reg.completionHandler(ar -> {
+    reg.completion().onComplete(ar -> {
       assertTrue(ar.succeeded());
       vertices[1].setTimer(200L, along -> {
         vertices[0].eventBus().<R>request(ADDRESS1, str).onComplete(onSuccess((Message<R> reply) -> {
@@ -128,8 +128,8 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
   public void testLocalHandlerClusteredPublish() throws Exception {
     startNodes(2);
     waitFor(2);
-    vertices[1].eventBus().consumer(ADDRESS1, msg -> complete()).completionHandler(v1 -> {
-      vertices[0].eventBus().localConsumer(ADDRESS1, msg -> complete()).completionHandler(v2 -> {
+    vertices[1].eventBus().consumer(ADDRESS1, msg -> complete()).completion().onComplete(v1 -> {
+      vertices[0].eventBus().localConsumer(ADDRESS1, msg -> complete()).completion().onComplete(v2 -> {
         vertices[1].setTimer(200L, aLong -> {
           vertices[0].eventBus().publish(ADDRESS1, "foo");
         });
@@ -170,9 +170,9 @@ public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
       }
     }
     MessageConsumer reg = vertices[2].eventBus().<T>consumer(ADDRESS1).handler(new MyHandler());
-    reg.completionHandler(new MyRegisterHandler());
+    reg.completion().onComplete(new MyRegisterHandler());
     reg = vertices[1].eventBus().<T>consumer(ADDRESS1).handler(new MyHandler());
-    reg.completionHandler(new MyRegisterHandler());
+    reg.completion().onComplete(new MyRegisterHandler());
     await();
   }
 
