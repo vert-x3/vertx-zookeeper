@@ -69,7 +69,7 @@ public class SubsMapHelper implements TreeCacheListener {
       try {
         Buffer buffer = Buffer.buffer();
         registrationInfo.writeToBuffer(buffer);
-        curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
+        curator.create().orSetData().creatingParentContainersIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
           if (e.getType() == CuratorEventType.CREATE || e.getType() == CuratorEventType.SET_DATA) {
             vertx.runOnContext(Avoid -> {
               ownSubs.compute(address, (add, curr) -> addToSet(registrationInfo, curr));
@@ -140,6 +140,7 @@ public class SubsMapHelper implements TreeCacheListener {
           }
         }).forPath(fullPath.apply(address, registrationInfo));
       }
+
     } catch (Exception e) {
       log.error(String.format("remove subs address %s failed.", address), e);
       promise.fail(e);
