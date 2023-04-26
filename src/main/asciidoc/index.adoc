@@ -122,6 +122,3 @@ and also
 java.util.logging.ConsoleHandler.level=INFO
 java.util.logging.FileHandler.level=INFO
 ----
-
-== About Zookeeper version
-We use Curator ${curator.version}, as Zookeeper latest stable is 3.4.8 so we do not support any features of 3.5.x
