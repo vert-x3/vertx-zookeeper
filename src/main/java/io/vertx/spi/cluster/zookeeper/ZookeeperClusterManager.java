@@ -407,9 +407,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       case CONNECTION_RECONNECTED:
         if (joined) {
           createThisNode();
-          List<Future> futures = new ArrayList<>();
+          List<Future<Void>> futures = new ArrayList<>();
           for(Map.Entry<String, NodeInfo> entry : localNodeInfo.entrySet()) {
-            Promise promise = Promise.promise();
+            Promise<Void> promise = Promise.promise();
             setNodeInfo(entry.getValue(), promise);
             futures.add(promise.future());
           }

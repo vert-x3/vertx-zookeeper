@@ -261,9 +261,9 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     Promise<Set<K>> keysPromise = ((VertxInternal)vertx).getOrCreateContext().promise();
     keys().onComplete(keysPromise);
     return keysPromise.future().compose(keys -> {
-      List<Future> futures = new ArrayList<>(keys.size());
+      List<Future<V>> futures = new ArrayList<>(keys.size());
       for (K k : keys) {
-        Promise valuePromise = Promise.promise();
+        Promise<V> valuePromise = Promise.promise();
         get(k).onComplete(valuePromise);
         futures.add(valuePromise.future());
       }
@@ -282,9 +282,9 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     Promise<Set<K>> keysPromise = ((VertxInternal)vertx).getOrCreateContext().promise();
     keys().onComplete(keysPromise);
     return keysPromise.future().map(ArrayList::new).compose(keys -> {
-      List<Future> futures = new ArrayList<>(keys.size());
+      List<Future<V>> futures = new ArrayList<>(keys.size());
       for (K k : keys) {
-        Promise valuePromise = Promise.promise();
+        Promise<V> valuePromise = Promise.promise();
         get(k).onComplete(valuePromise);
         futures.add(valuePromise.future());
       }

@@ -182,7 +182,7 @@ public class SubsMapHelper implements TreeCacheListener {
       case CONNECTION_RECONNECTED:
         log.info(String.format("vertx node %s have reconnected to zookeeper", nodeId));
         vertx.runOnContext(aVoid -> {
-          List<Future> futures = new ArrayList<>();
+          List<Future<Void>> futures = new ArrayList<>();
           for (Map.Entry<String, Set<RegistrationInfo>> entry : ownSubs.entrySet()) {
             for (RegistrationInfo registrationInfo : entry.getValue()) {
               Promise<Void> promise = Promise.promise();
