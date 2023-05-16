@@ -16,7 +16,6 @@
 
 package io.vertx.spi.cluster.zookeeper;
 
-import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
@@ -413,7 +412,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
             setNodeInfo(entry.getValue(), promise);
             futures.add(promise.future());
           }
-          CompositeFuture.all(futures).onComplete(ar -> {
+          Future.all(futures).onComplete(ar -> {
             if (ar.failed()) {
               log.error("recover node info failed.", ar.cause());
             }

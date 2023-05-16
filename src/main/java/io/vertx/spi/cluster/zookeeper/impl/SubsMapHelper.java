@@ -1,6 +1,5 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.VertxException;
@@ -190,7 +189,7 @@ public class SubsMapHelper implements TreeCacheListener {
               futures.add(promise.future());
             }
           }
-          CompositeFuture.all(futures).onComplete(ar -> {
+          Future.all(futures).onComplete(ar -> {
             if (ar.failed()) {
               log.error("recover node subs information failed.", ar.cause());
             } else {

@@ -15,7 +15,6 @@
  */
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
@@ -267,7 +266,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         get(k).onComplete(valuePromise);
         futures.add(valuePromise.future());
       }
-      return CompositeFuture.all(futures).map(compositeFuture -> {
+      return Future.all(futures).map(compositeFuture -> {
         List<V> values = new ArrayList<>(compositeFuture.size());
         for (int i = 0; i < compositeFuture.size(); i++) {
           values.add(compositeFuture.resultAt(i));
@@ -288,7 +287,7 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
         get(k).onComplete(valuePromise);
         futures.add(valuePromise.future());
       }
-      return CompositeFuture.all(futures).map(compositeFuture -> {
+      return Future.all(futures).map(compositeFuture -> {
         Map<K, V> map = new HashMap<>();
         for (int i = 0; i < compositeFuture.size(); i++) {
           map.put(keys.get(i), compositeFuture.resultAt(i));
