@@ -103,6 +103,25 @@ You can also specify configuration programmatically if embedding:
 {@link example.Examples#example2()}
 ----
 
+The retry policy can be specified in the json configuration as following:
+
+[source,json]
+{
+  "retry":{
+    "policy": "exponential_backoff"
+  }
+}
+
+the possible value for the policy are:
+
+* exponential_backoff (default)
+* bounded_exponential_backoff
+* one_time
+* n_times
+* forever
+* until_elapsed
+
+
 IMPORTANT: You can also configure the zookeeper hosts using the `vertx.zookeeper.hosts` system property.
 
 === Enabling logging
