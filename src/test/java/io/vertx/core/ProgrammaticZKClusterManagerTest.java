@@ -25,6 +25,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.curator.retry.RetryOneTime;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -68,6 +69,35 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     JsonObject config = zkCluster.getDefaultConfig();
     ZookeeperClusterManager mgr = new ZookeeperClusterManager(config);
     testProgrammatic(mgr, config);
+  }
+
+  @Test
+  public void testProgrammaticSetRetryPolicyDefault() throws Exception {
+    JsonObject config = zkCluster.getDefaultConfig();
+    ZookeeperClusterManager mgr = new ZookeeperClusterManager(config);
+    VertxOptions options = new VertxOptions().setClusterManager(mgr);
+    Vertx.clusteredVertx(options).onComplete(res -> {
+      assertTrue(res.succeeded());
+      assertNotNull(mgr.getCuratorFramework());
+      assertTrue(mgr.getCuratorFramework().getZookeeperClient().getRetryPolicy() instanceof ExponentialBackoffRetry);
+      testComplete();
+    });
+    await();
+  }
+
+  public void testProgrammaticSetRetryPolicy() throws Exception {
+    JsonObject config = zkCluster.getDefaultConfig();
+    config.put("retry", new JsonObject().put("policy","one_time"));
+
+    ZookeeperClusterManager mgr = new ZookeeperClusterManager(config);
+    VertxOptions options = new VertxOptions().setClusterManager(mgr);
+    Vertx.clusteredVertx(options).onComplete(res -> {
+      assertTrue(res.succeeded());
+      assertNotNull(mgr.getCuratorFramework());
+      assertTrue(mgr.getCuratorFramework().getZookeeperClient().getRetryPolicy() instanceof RetryOneTime);
+      testComplete();
+    });
+    await();
   }
 
   @Test
