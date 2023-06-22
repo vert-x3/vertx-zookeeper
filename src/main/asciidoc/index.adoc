@@ -106,11 +106,13 @@ You can also specify configuration programmatically if embedding:
 The retry policy can be specified in the json configuration as following:
 
 [source,json]
+----
 {
   "retry":{
     "policy": "exponential_backoff"
   }
 }
+----
 
 the possible value for the policy are:
 
