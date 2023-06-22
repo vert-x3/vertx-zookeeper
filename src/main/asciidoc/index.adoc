@@ -114,14 +114,14 @@ The retry policy can be specified in the json configuration as following:
 }
 ----
 
-the possible value for the policy are:
+The possible value for the policy are:
 
-* exponential_backoff (default)
-* bounded_exponential_backoff
-* one_time
-* n_times
-* forever
-* until_elapsed
+* `exponential_backoff` (default)
+* `bounded_exponential_backoff`
+* `one_time`
+* `n_times`
+* `forever`
+* `until_elapsed`
 
 
 IMPORTANT: You can also configure the zookeeper hosts using the `vertx.zookeeper.hosts` system property.
