@@ -33,12 +33,7 @@ import io.vertx.core.spi.cluster.NodeInfo;
 import io.vertx.core.spi.cluster.NodeListener;
 import io.vertx.core.spi.cluster.NodeSelector;
 import io.vertx.core.spi.cluster.RegistrationInfo;
-import io.vertx.spi.cluster.zookeeper.impl.ConfigUtil;
-import io.vertx.spi.cluster.zookeeper.impl.SubsMapHelper;
-import io.vertx.spi.cluster.zookeeper.impl.ZKAsyncMap;
-import io.vertx.spi.cluster.zookeeper.impl.ZKCounter;
-import io.vertx.spi.cluster.zookeeper.impl.ZKLock;
-import io.vertx.spi.cluster.zookeeper.impl.ZKSyncMap;
+import io.vertx.spi.cluster.zookeeper.impl.*;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -292,10 +287,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         }
 
         if (curator == null) {
-          retryPolicy = new ExponentialBackoffRetry(
-            conf.getJsonObject("retry", new JsonObject()).getInteger("initialSleepTime", 1000),
-            conf.getJsonObject("retry", new JsonObject()).getInteger("maxTimes", 5),
-            conf.getJsonObject("retry", new JsonObject()).getInteger("intervalTimes", 10000));
+          retryPolicy = RetryPolicyHelper.createRetryPolicy(conf.getJsonObject("retry", new JsonObject()));
 
           // Read the zookeeper hosts from a system variable
           String hosts = System.getProperty("vertx.zookeeper.hosts");
