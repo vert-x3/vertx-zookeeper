@@ -149,27 +149,20 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
     return assertKeyAndValueAreNotNull(k, v)
       .compose(aVoid -> {
         Promise<V> innerPromise = Promise.promise();
-        vertx.<V>executeBlocking(future -> {
+        vertx.<V>executeBlocking(() -> {
           long startTime = Instant.now().toEpochMilli();
           int retries = 0;
 
           for (; ; ) {
-            try {
-              Stat stat = new Stat();
-              String path = keyPath(k);
-              V currentValue = getData(stat, path);
-              //do not replace value if previous value is null
-              if (currentValue == null) {
-                future.complete(null);
-                return;
-              }
-              if (compareAndSet(startTime, retries++, stat, path, currentValue, v)) {
-                future.complete(currentValue);
-                return;
-              }
-            } catch (Exception e) {
-              future.fail(e);
-              return;
+            Stat stat = new Stat();
+            String path = keyPath(k);
+            V currentValue = getData(stat, path);
+            //do not replace value if previous value is null
+            if (currentValue == null) {
+              return null;
+            }
+            if (compareAndSet(startTime, retries++, stat, path, currentValue, v)) {
+              return currentValue;
             }
           }
         }, false).onComplete(innerPromise);
@@ -184,26 +177,19 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
       .compose(aVoid -> assertValueIsNotNull(newValue))
       .compose(aVoid -> {
         Promise<Boolean> innerPromise = Promise.promise();
-        vertx.<Boolean>executeBlocking(future -> {
+        vertx.<Boolean>executeBlocking(() -> {
           long startTime = Instant.now().toEpochMilli();
           int retries = 0;
 
           for (; ; ) {
-            try {
-              Stat stat = new Stat();
-              String path = keyPath(k);
-              V currentValue = getData(stat, path);
-              if (!currentValue.equals(oldValue)) {
-                future.complete(false);
-                return;
-              }
-              if (compareAndSet(startTime, retries++, stat, path, oldValue, newValue)) {
-                future.complete(true);
-                return;
-              }
-            } catch (Exception e) {
-              future.fail(e);
-              return;
+            Stat stat = new Stat();
+            String path = keyPath(k);
+            V currentValue = getData(stat, path);
+            if (!currentValue.equals(oldValue)) {
+              return false;
+            }
+            if (compareAndSet(startTime, retries++, stat, path, oldValue, newValue)) {
+              return true;
             }
           }
         }, false).onComplete(innerPromise);

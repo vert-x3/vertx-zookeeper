@@ -144,10 +144,10 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public <K, V> void getAsyncMap(String name, Promise<AsyncMap<K, V>> promise) {
-    vertx.<AsyncMap<K, V>>executeBlocking(prom -> {
+    vertx.<AsyncMap<K, V>>executeBlocking(() -> {
       @SuppressWarnings("unchecked")
       AsyncMap<K, V> zkAsyncMap = (AsyncMap<K, V>) asyncMapCache.computeIfAbsent(name, key -> new ZKAsyncMap<>(vertx, curator, name));
-      prom.complete(zkAsyncMap);
+      return zkAsyncMap;
     }).onComplete(promise);
   }
 
@@ -158,7 +158,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getLockWithTimeout(String name, long timeout, Promise<Lock> promise) {
-    vertx.<Lock>executeBlocking(prom -> {
+    vertx.<Lock>executeBlocking(() -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
         InterProcessSemaphoreMutex mutexLock = new InterProcessSemaphoreMutex(curator, ZK_PATH_LOCKS + name);
@@ -167,7 +167,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       try {
         if (lock.getLock().acquire(timeout, TimeUnit.MILLISECONDS)) {
           locks.putIfAbsent(name, lock);
-          prom.complete(lock);
+          return lock;
         } else {
           throw new VertxException("Timed out waiting to get lock " + name);
         }
@@ -179,12 +179,12 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getCounter(String name, Promise<Counter> promise) {
-    vertx.<Counter>executeBlocking(future -> {
+    vertx.<Counter>executeBlocking(() -> {
       try {
         Objects.requireNonNull(name);
-        future.complete(new ZKCounter(vertx, curator, name, retryPolicy));
+        return new ZKCounter(vertx, curator, name, retryPolicy);
       } catch (Exception e) {
-        future.fail(new VertxException(e));
+        throw new VertxException(e, true);
       }
     }).onComplete(promise);
   }
@@ -234,14 +234,14 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getNodeInfo(String nodeId, Promise<NodeInfo> promise) {
-    vertx.<NodeInfo>executeBlocking(prom -> {
-      prom.complete(Optional.ofNullable(clusterNodes.getCurrentData(ZK_PATH_CLUSTER_NODE + nodeId))
+    vertx.<NodeInfo>executeBlocking(() -> {
+      return Optional.ofNullable(clusterNodes.getCurrentData(ZK_PATH_CLUSTER_NODE + nodeId))
         .map(childData -> {
-          Buffer buffer = Buffer.buffer(childData.getData());
-          NodeInfo nodeInfo = new NodeInfo();
-          nodeInfo.readFromBuffer(0, buffer);
-          return nodeInfo;
-        }).orElseThrow(() -> new VertxException("Not a member of the cluster")));
+            Buffer buffer = Buffer.buffer(childData.getData());
+            NodeInfo nodeInfo = new NodeInfo();
+            nodeInfo.readFromBuffer(0, buffer);
+            return nodeInfo;
+          }).orElseThrow(() -> new VertxException("Not a member of the cluster", true));
     }, false).onComplete(promise);
   }
 
@@ -270,20 +270,15 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void join(Promise<Void> promise) {
-    vertx.<Void>executeBlocking(prom -> {
+    vertx.<Void>executeBlocking(() -> {
       if (!active) {
         active = true;
         lockReleaseExec = Executors.newCachedThreadPool(r -> new Thread(r, "vertx-zookeeper-service-release-lock-thread"));
 
         //The curator instance has been passed using the constructor.
         if (customCuratorCluster) {
-          try {
-            addLocalNodeId();
-            prom.complete();
-          } catch (VertxException e) {
-            prom.fail(e);
-          }
-          return;
+          addLocalNodeId();
+          return null;
         }
 
         if (curator == null) {
@@ -309,26 +304,22 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
             Thread.sleep(100);
           } catch (InterruptedException e) {
             if (curator.getState() != CuratorFrameworkState.STARTED) {
-              prom.fail("zookeeper client being interrupted while starting.");
+              throw new VertxException("zookeeper client being interrupted while starting.", true);
             }
           }
         }
         nodeId = UUID.randomUUID().toString();
-        try {
-          addLocalNodeId();
-          prom.complete();
-        } catch (Exception e) {
-          prom.fail(e);
-        }
+        addLocalNodeId();
+        return null;
       } else {
-        prom.complete();
+        return null;
       }
     }).onComplete(promise);
   }
 
   @Override
   public void leave(Promise<Void> promise) {
-    vertx.<Void>executeBlocking(prom -> {
+    vertx.<Void>executeBlocking(() -> {
       synchronized (ZookeeperClusterManager.this) {
         if (active) {
           active = false;
@@ -340,10 +331,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
             curator.close();
           } catch (Exception e) {
             log.warn("zookeeper close exception.", e);
-          } finally {
-            prom.complete();
           }
-        } else prom.complete();
+        }
+        return null;
       }
     }).onComplete(promise);
   }
@@ -365,9 +355,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getRegistrations(String address, Promise<List<RegistrationInfo>> promise) {
-    vertx.<List<RegistrationInfo>>executeBlocking(prom -> {
-      prom.complete(subsMapHelper.get(address));
-    }, false).onComplete(promise);
+    vertx.executeBlocking(() -> subsMapHelper.get(address), false).onComplete(promise);
   }
 
   @Override

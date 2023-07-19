@@ -39,11 +39,11 @@ public class ZKCounter implements Counter {
 
   @Override
   public Future<Long> get() {
-    return vertx.executeBlocking(future -> {
+    return vertx.executeBlocking(() -> {
       try {
-        future.complete(atomicLong.get().preValue());
+        return atomicLong.get().preValue();
       } catch (Exception e) {
-        future.fail(new VertxException(e));
+        throw new VertxException(e, true);
       }
     });
   }
@@ -59,32 +59,32 @@ public class ZKCounter implements Counter {
   }
 
   private Future<Long> increment(boolean post) {
-    return vertx.executeBlocking(future -> {
+    return vertx.executeBlocking(() -> {
       try {
         long returnValue = 0;
         if (atomicLong.get().succeeded()) returnValue = atomicLong.get().preValue();
         if (atomicLong.increment().succeeded()) {
-          future.complete(post ? atomicLong.get().postValue() : returnValue);
+          return post ? atomicLong.get().postValue() : returnValue;
         } else {
-          future.fail(new VertxException("increment value failed."));
+          throw new VertxException("increment value failed.", true);
         }
       } catch (Exception e) {
-        future.fail(new VertxException(e));
+        throw new VertxException(e, true);
       }
     });
   }
 
   @Override
   public Future<Long> decrementAndGet() {
-    return vertx.executeBlocking(future -> {
+    return vertx.executeBlocking(() -> {
       try {
         if (atomicLong.decrement().succeeded()) {
-          future.complete(atomicLong.get().postValue());
+          return atomicLong.get().postValue();
         } else {
-          future.fail(new VertxException("decrement value failed."));
+          throw new VertxException("decrement value failed.", true);
         }
       } catch (Exception e) {
-        future.fail(new VertxException(e));
+        throw new VertxException(e, true);
       }
     });
   }
@@ -100,29 +100,29 @@ public class ZKCounter implements Counter {
   }
 
   private Future<Long> add(long value, boolean post) {
-    return vertx.executeBlocking(future -> {
+    return vertx.executeBlocking(() -> {
       try {
         long returnValue = 0;
         if (atomicLong.get().succeeded()) returnValue = atomicLong.get().preValue();
         if (atomicLong.add(value).succeeded()) {
-          future.complete(post ? atomicLong.get().postValue() : returnValue);
+          return post ? atomicLong.get().postValue() : returnValue;
         } else {
-          future.fail(new VertxException("add value failed."));
+          throw new VertxException("add value failed.", true);
         }
       } catch (Exception e) {
-        future.fail(new VertxException(e));
+        throw new VertxException(e, true);
       }
     });
   }
 
   @Override
   public Future<Boolean> compareAndSet(long expected, long value) {
-    return vertx.executeBlocking(future -> {
+    return vertx.executeBlocking(() -> {
       try {
         if (atomicLong.get().succeeded() && atomicLong.get().preValue() == 0) this.atomicLong.initialize(0L);
-        future.complete(atomicLong.compareAndSet(expected, value).succeeded());
+        return atomicLong.compareAndSet(expected, value).succeeded();
       } catch (Exception e) {
-        future.fail(new VertxException(e));
+        throw new VertxException(e, true);
       }
     });
   }

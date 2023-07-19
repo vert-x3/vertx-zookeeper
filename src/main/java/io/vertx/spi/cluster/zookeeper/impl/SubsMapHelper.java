@@ -163,7 +163,7 @@ public class SubsMapHelper implements TreeCacheListener {
           break;
         }
         String addr = pathElements[2];
-        vertx.<List<RegistrationInfo>>executeBlocking(prom -> prom.complete(get(addr)), false).onComplete(ar -> {
+        vertx.<List<RegistrationInfo>>executeBlocking(() -> get(addr), false).onComplete(ar -> {
           if (ar.succeeded()) {
             nodeSelector.registrationsUpdated(new RegistrationUpdateEvent(addr, ar.result()));
           } else {
