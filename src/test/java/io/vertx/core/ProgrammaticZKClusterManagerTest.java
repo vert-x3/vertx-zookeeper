@@ -44,8 +44,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
   private void testProgrammatic(ZookeeperClusterManager mgr, JsonObject config) throws Exception {
     mgr.setConfig(config);
     assertEquals(config, mgr.getConfig());
-    VertxOptions options = new VertxOptions().setClusterManager(mgr);
-    Vertx.clusteredVertx(options).onComplete(res -> {
+    Vertx.builder().withClusterManager(mgr).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr.getCuratorFramework());
       res.result().close().onComplete(res2 -> {
@@ -75,8 +74,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
   public void testProgrammaticSetRetryPolicyDefault() throws Exception {
     JsonObject config = zkCluster.getDefaultConfig();
     ZookeeperClusterManager mgr = new ZookeeperClusterManager(config);
-    VertxOptions options = new VertxOptions().setClusterManager(mgr);
-    Vertx.clusteredVertx(options).onComplete(res -> {
+    Vertx.builder().withClusterManager(mgr).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr.getCuratorFramework());
       assertTrue(mgr.getCuratorFramework().getZookeeperClient().getRetryPolicy() instanceof ExponentialBackoffRetry);
@@ -90,8 +88,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     config.put("retry", new JsonObject().put("policy","one_time"));
 
     ZookeeperClusterManager mgr = new ZookeeperClusterManager(config);
-    VertxOptions options = new VertxOptions().setClusterManager(mgr);
-    Vertx.clusteredVertx(options).onComplete(res -> {
+    Vertx.builder().withClusterManager(mgr).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr.getCuratorFramework());
       assertTrue(mgr.getCuratorFramework().getZookeeperClient().getRetryPolicy() instanceof RetryOneTime);
@@ -129,13 +126,11 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     ZookeeperClusterManager mgr1 = new ZookeeperClusterManager(curator1);
     ZookeeperClusterManager mgr2 = new ZookeeperClusterManager(curator2);
-    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1);
-    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2);
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options1).onComplete(res -> {
+    Vertx.builder().withClusterManager(mgr1).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr1.getCuratorFramework());
       res.result().eventBus().consumer("news", message -> {
@@ -148,7 +143,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() != null);
 
-    Vertx.clusteredVertx(options2).onComplete(res -> {
+    Vertx.builder().withClusterManager(mgr2).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr2.getCuratorFramework());
       vertx2.set(res.result());
@@ -190,15 +185,15 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     ZookeeperClusterManager mgr1 = new ZookeeperClusterManager(curator1);
     ZookeeperClusterManager mgr2 = new ZookeeperClusterManager(curator2);
-    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1);
+    VertxOptions options1 = new VertxOptions();
     options1.getEventBusOptions().setHost("127.0.0.1");
-    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2);
+    VertxOptions options2 = new VertxOptions();
     options2.getEventBusOptions().setHost("127.0.0.1");
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options1).onComplete(res -> {
+    Vertx.builder().with(options1).withClusterManager(mgr1).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr1.getCuratorFramework());
       res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
@@ -210,7 +205,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() != null);
 
-    Vertx.clusteredVertx(options2).onComplete(res -> {
+    Vertx.builder().with(options2).withClusterManager(mgr2).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr2.getCuratorFramework());
       vertx2.set(res.result());
@@ -248,12 +243,12 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
     String nodeID = UUID.randomUUID().toString();
 
     ZookeeperClusterManager mgr = new ZookeeperClusterManager(curator, nodeID);
-    VertxOptions options = new VertxOptions().setClusterManager(mgr);
+    VertxOptions options = new VertxOptions();
     options.getEventBusOptions().setHost("127.0.0.1");
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options).onComplete(res -> {
+    Vertx.builder().with(options).withClusterManager(mgr).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr.getCuratorFramework());
       res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
@@ -315,15 +310,15 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     ZookeeperClusterManager mgr1 = new ZookeeperClusterManager(curator1);
     ZookeeperClusterManager mgr2 = new ZookeeperClusterManager(curator2);
-    VertxOptions options1 = new VertxOptions().setClusterManager(mgr1);
+    VertxOptions options1 = new VertxOptions();
     options1.getEventBusOptions().setHost("127.0.0.1");
-    VertxOptions options2 = new VertxOptions().setClusterManager(mgr2);
+    VertxOptions options2 = new VertxOptions();
     options2.getEventBusOptions().setHost("127.0.0.1");
 
     AtomicReference<Vertx> vertx1 = new AtomicReference<>();
     AtomicReference<Vertx> vertx2 = new AtomicReference<>();
 
-    Vertx.clusteredVertx(options1).onComplete(res -> {
+    Vertx.builder().with(options1).withClusterManager(mgr1).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr1.getCuratorFramework());
       res.result().sharedData().getClusterWideMap("mymap1").onComplete(ar -> {
@@ -335,7 +330,7 @@ public class ProgrammaticZKClusterManagerTest extends AsyncTestBase {
 
     assertWaitUntil(() -> vertx1.get() != null);
 
-    Vertx.clusteredVertx(options2).onComplete(res -> {
+    Vertx.builder().with(options2).withClusterManager(mgr2).buildClustered().onComplete(res -> {
       assertTrue(res.succeeded());
       assertNotNull(mgr2.getCuratorFramework());
       vertx2.set(res.result());

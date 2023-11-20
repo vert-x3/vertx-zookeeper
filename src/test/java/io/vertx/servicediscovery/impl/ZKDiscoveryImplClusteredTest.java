@@ -31,9 +31,9 @@ public class ZKDiscoveryImplClusteredTest extends DiscoveryImplTestBase {
 
   @Before
   public void setUp() {
-    VertxOptions options = new VertxOptions().setClusterManager(zkClustered.getClusterManager());
+    VertxOptions options = new VertxOptions();
     options.getEventBusOptions().setHost("localhost").setPort(0);
-    Vertx.clusteredVertx(options).onComplete(ar -> {
+    Vertx.builder().with(options).withClusterManager(zkClustered.getClusterManager()).buildClustered().onComplete(ar -> {
       vertx = ar.result();
     });
     await().until(() -> vertx != null);

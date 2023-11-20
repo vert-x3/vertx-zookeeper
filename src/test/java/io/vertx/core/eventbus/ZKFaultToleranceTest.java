@@ -41,7 +41,7 @@ public class ZKFaultToleranceTest extends FaultToleranceTest {
     for (int i = 0; i < numNodes; i++) {
       int index = i;
       options.getEventBusOptions().setHost("localhost").setPort(0);
-      clusteredVertx(options.setClusterManager(getClusterManager()), ar -> {
+      clusteredVertx(options, ar -> {
         try {
           if (ar.failed()) {
             ar.cause().printStackTrace();
