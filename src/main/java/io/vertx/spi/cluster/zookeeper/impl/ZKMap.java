@@ -34,7 +34,7 @@ import org.apache.zookeeper.data.Stat;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
-import java.util.Base64;
+
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
