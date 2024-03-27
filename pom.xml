@@ -9,11 +9,11 @@
   </parent>
 
   <artifactId>vertx-zookeeper</artifactId>
-  <version>4.5.7-SNAPSHOT</version>
+  <version>4.5.7</version>
   <name>Vert.x Zookeeper Cluster Manager</name>
 
   <properties>
-    <stack.version>4.5.7-SNAPSHOT</stack.version>
+    <stack.version>4.5.7</stack.version>
     <curator.version>5.4.0</curator.version>
     <zookeeper.version>3.7.1</zookeeper.version>
     <junit.version>4.13.1</junit.version>
