@@ -16,8 +16,8 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
 import io.vertx.core.VertxException;
-import io.vertx.core.impl.logging.Logger;
-import io.vertx.core.impl.logging.LoggerFactory;
+import io.vertx.core.internal.logging.Logger;
+import io.vertx.core.internal.logging.LoggerFactory;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.framework.imps.CuratorFrameworkState;
