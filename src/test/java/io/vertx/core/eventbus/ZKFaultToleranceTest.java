@@ -31,7 +31,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-public class ZKFaultToleranceTest extends FaultToleranceTest {
+public class ZKFaultToleranceTest extends io.vertx.tests.eventbus.FaultToleranceTest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 

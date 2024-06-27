@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 /**
  *
  */
-public class ZKClusteredSharedCounterTest extends ClusteredSharedCounterTest {
+public class ZKClusteredSharedCounterTest extends io.vertx.tests.shareddata.ClusteredSharedCounterTest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 

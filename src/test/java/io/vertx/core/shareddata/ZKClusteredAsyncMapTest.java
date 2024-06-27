@@ -27,7 +27,7 @@ import java.util.Objects;
 /**
  *
  */
-public class ZKClusteredAsyncMapTest extends ClusteredAsyncMapTest {
+public class ZKClusteredAsyncMapTest extends io.vertx.tests.shareddata.ClusteredAsyncMapTest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 
