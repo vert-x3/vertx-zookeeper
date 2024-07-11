@@ -4,8 +4,8 @@
 
   <parent>
     <groupId>io.vertx</groupId>
-    <artifactId>vertx-ext-parent</artifactId>
-    <version>38</version>
+    <artifactId>vertx5-parent</artifactId>
+    <version>3</version>
   </parent>
 
   <artifactId>vertx-zookeeper</artifactId>
@@ -13,7 +13,6 @@
   <name>Vert.x Zookeeper Cluster Manager</name>
 
   <properties>
-    <stack.version>5.0.0-SNAPSHOT</stack.version>
     <curator.version>5.4.0</curator.version>
     <zookeeper.version>3.7.2</zookeeper.version>
     <junit.version>4.13.1</junit.version>
@@ -26,7 +25,7 @@
       <dependency>
         <groupId>io.vertx</groupId>
         <artifactId>vertx-dependencies</artifactId>
-        <version>${stack.version}</version>
+        <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -217,15 +216,16 @@
     <pluginManagement>
       <plugins>
         <plugin>
-          <groupId>org.bsc.maven</groupId>
-          <artifactId>maven-processor-plugin</artifactId>
+          <artifactId>maven-compiler-plugin</artifactId>
           <executions>
             <execution>
-              <id>generate-sources</id>
+              <id>default-compile</id>
+              <phase>compile</phase>
               <configuration>
-                <optionMap>
-                  <curator.version>${curator.version}</curator.version>
-                </optionMap>
+                <annotationProcessors>
+                  <annotationProcessor>io.vertx.codegen.CodeGenProcessor</annotationProcessor>
+                  <annotationProcessor>io.vertx.docgen.JavaDocGenProcessor</annotationProcessor>
+                </annotationProcessors>
               </configuration>
             </execution>
           </executions>
@@ -249,7 +249,21 @@
         </plugin>
       </plugins>
     </pluginManagement>
+    <plugins>
+      <plugin>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>package-docs</id>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
+
 
   <profiles>
     <profile>

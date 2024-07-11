@@ -22,7 +22,7 @@ import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 /**
  * Created by stream.Liu
  */
-public class ZKClusteredHATest extends HATest {
+public class ZKClusteredHATest extends io.vertx.tests.ha.HATest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 

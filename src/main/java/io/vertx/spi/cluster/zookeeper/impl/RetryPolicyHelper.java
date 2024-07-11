@@ -1,7 +1,7 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
-import io.vertx.core.impl.logging.Logger;
-import io.vertx.core.impl.logging.LoggerFactory;
+import io.vertx.core.internal.logging.Logger;
+import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.json.JsonObject;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.retry.*;

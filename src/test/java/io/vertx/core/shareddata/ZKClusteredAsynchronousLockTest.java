@@ -22,7 +22,7 @@ import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 /**
  * Created by stream.Liu
  */
-public class ZKClusteredAsynchronousLockTest extends ClusteredAsynchronousLockTest {
+public class ZKClusteredAsynchronousLockTest extends io.vertx.tests.shareddata.ClusteredAsynchronousLockTest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 

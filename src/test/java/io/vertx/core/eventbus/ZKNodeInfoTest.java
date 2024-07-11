@@ -19,7 +19,7 @@ package io.vertx.core.eventbus;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 
-public class ZKNodeInfoTest extends NodeInfoTest {
+public class ZKNodeInfoTest extends io.vertx.tests.eventbus.NodeInfoTest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 

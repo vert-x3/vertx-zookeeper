@@ -33,7 +33,7 @@ import java.util.function.Consumer;
  *
  */
 
-public class ZKClusteredEventbusTest extends ClusteredEventBusTest {
+public class ZKClusteredEventbusTest extends io.vertx.tests.eventbus.ClusteredEventBusTest {
 
   private final MockZKCluster zkClustered = new MockZKCluster();
 
