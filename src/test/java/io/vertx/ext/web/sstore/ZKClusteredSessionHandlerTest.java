@@ -17,6 +17,7 @@
 package io.vertx.ext.web.sstore;
 
 import io.vertx.core.spi.cluster.ClusterManager;
+import io.vertx.ext.web.it.sstore.ClusteredSessionHandlerTest;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 import org.junit.Ignore;
 import org.junit.Test;
