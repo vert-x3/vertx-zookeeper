@@ -8,9 +8,9 @@ This implementation is packaged inside:
 [source,xml,subs="+attributes"]
 ----
 <dependency>
-<groupId>io.vertx</groupId>
-<artifactId>vertx-zookeeper</artifactId>
-<version>${maven.version}</version>
+  <groupId>io.vertx</groupId>
+  <artifactId>vertx-zookeeper</artifactId>
+  <version>${maven.version}</version>
 </dependency>
 ----
 
@@ -68,7 +68,7 @@ will be used instead. If you want to embed the `zookeeper.json` file in a fat ja
 fat jar. If it's an external file, the*directory** containing the file must be added to the classpath. For
 example, if you are using the _launcher_ class from Vert.x, the classpath enhancement can be done as follows:
 
-[source]
+[source,shell]
 ----
 # If the zookeeper.json is in the current directory:
 java -jar ... -cp . -cluster
@@ -81,7 +81,7 @@ java -jar ... -cp conf -cluster
 Another way to override the configuration is by providing the system property `vertx.zookeeper.conf` with a
 location:
 
-[source]
+[source,shell]
 ----
 # Use a cluster configuration located in an external file
 java -Dvertx.zookeeper.config=./config/my-zookeeper-conf.json -jar ... -cluster
@@ -133,12 +133,14 @@ to see if it's forming a cluster properly. You can do this (when using the defau
 called `vertx-default-jul-logging.properties` on your classpath. This is a standard java.util.logging (JUL)
 configuration file. Inside it set:
 
+[source,properties]
 ----
 org.apache.zookeeper.level=INFO
 ----
 
 and also
 
+[source,properties]
 ----
 java.util.logging.ConsoleHandler.level=INFO
 java.util.logging.FileHandler.level=INFO

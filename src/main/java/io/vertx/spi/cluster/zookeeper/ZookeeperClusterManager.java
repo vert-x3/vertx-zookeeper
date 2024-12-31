@@ -28,11 +28,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.Counter;
 import io.vertx.core.shareddata.Lock;
-import io.vertx.core.spi.cluster.ClusterManager;
-import io.vertx.core.spi.cluster.NodeInfo;
-import io.vertx.core.spi.cluster.NodeListener;
-import io.vertx.core.spi.cluster.NodeSelector;
-import io.vertx.core.spi.cluster.RegistrationInfo;
+import io.vertx.core.spi.cluster.*;
 import io.vertx.spi.cluster.zookeeper.impl.*;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
@@ -43,7 +39,6 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessSemaphoreMutex;
-import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
@@ -70,9 +65,9 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final Logger log = LoggerFactory.getLogger(ZookeeperClusterManager.class);
 
   private VertxInternal vertx;
-  private NodeSelector nodeSelector;
 
   private NodeListener nodeListener;
+  private RegistrationListener registrationListener;
   private PathChildrenCache clusterNodes;
   private volatile boolean active;
   private volatile boolean joined;
@@ -137,9 +132,8 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void init(Vertx vertx, NodeSelector nodeSelector) {
+  public void init(Vertx vertx) {
     this.vertx = (VertxInternal) vertx;
-    this.nodeSelector = nodeSelector;
   }
 
   @Override
@@ -202,6 +196,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
+  public void registrationListener(RegistrationListener registrationListener) {
+    this.registrationListener = registrationListener;
+  }
+
+  @Override
   public void nodeListener(NodeListener listener) {
     this.nodeListener = listener;
   }
@@ -253,7 +252,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       //Join to the cluster
       createThisNode();
       joined = true;
-      subsMapHelper = new SubsMapHelper(curator, vertx, nodeSelector, nodeId);
+      subsMapHelper = new SubsMapHelper(curator, vertx, registrationListener, nodeId);
     } catch (Exception e) {
       throw new VertxException(e);
     }

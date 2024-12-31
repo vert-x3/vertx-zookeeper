@@ -16,6 +16,7 @@
 
 package io.vertx.core.eventbus;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.buffer.Buffer;
@@ -41,7 +42,8 @@ public class ZKFaultToleranceTest extends io.vertx.tests.eventbus.FaultTolerance
     for (int i = 0; i < numNodes; i++) {
       int index = i;
       options.getEventBusOptions().setHost("localhost").setPort(0);
-      clusteredVertx(options, ar -> {
+      Future<Vertx> res = clusteredVertx(options);
+      res.onComplete(ar -> {
         try {
           if (ar.failed()) {
             ar.cause().printStackTrace();

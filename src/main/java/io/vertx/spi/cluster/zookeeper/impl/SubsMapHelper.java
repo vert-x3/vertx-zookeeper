@@ -7,8 +7,8 @@ import io.vertx.core.buffer.Buffer;
 import io.vertx.core.internal.VertxInternal;
 import io.vertx.core.internal.logging.Logger;
 import io.vertx.core.internal.logging.LoggerFactory;
-import io.vertx.core.spi.cluster.NodeSelector;
 import io.vertx.core.spi.cluster.RegistrationInfo;
+import io.vertx.core.spi.cluster.RegistrationListener;
 import io.vertx.core.spi.cluster.RegistrationUpdateEvent;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
@@ -29,7 +29,7 @@ public class SubsMapHelper implements TreeCacheListener {
   private final CuratorFramework curator;
   private final TreeCache treeCache;
   private final VertxInternal vertx;
-  private final NodeSelector nodeSelector;
+  private final RegistrationListener registrationListener;
   private final String nodeId;
   private final ConcurrentMap<String, Set<RegistrationInfo>> ownSubs = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, Set<RegistrationInfo>> localSubs = new ConcurrentHashMap<>();
@@ -41,7 +41,7 @@ public class SubsMapHelper implements TreeCacheListener {
   private static final Function<RegistrationInfo, String> valuePath = registrationInfo -> registrationInfo.nodeId() + "-" + registrationInfo.seq();
   private static final BiFunction<String, RegistrationInfo, String> fullPath = (address, registrationInfo) -> keyPath.apply(address) + "/" + valuePath.apply(registrationInfo);
 
-  public SubsMapHelper(CuratorFramework curator, VertxInternal vertx, NodeSelector nodeSelector, String nodeId) {
+  public SubsMapHelper(CuratorFramework curator, VertxInternal vertx, RegistrationListener registrationListener, String nodeId) {
     this.curator = curator;
     this.vertx = vertx;
     this.treeCache = new TreeCache(curator, VERTX_SUBS_NAME);
@@ -51,7 +51,7 @@ public class SubsMapHelper implements TreeCacheListener {
     } catch (Exception e) {
       throw new VertxException(e);
     }
-    this.nodeSelector = nodeSelector;
+    this.registrationListener = registrationListener;
     this.nodeId = nodeId;
   }
 
@@ -165,10 +165,10 @@ public class SubsMapHelper implements TreeCacheListener {
         String addr = pathElements[2];
         vertx.<List<RegistrationInfo>>executeBlocking(() -> get(addr), false).onComplete(ar -> {
           if (ar.succeeded()) {
-            nodeSelector.registrationsUpdated(new RegistrationUpdateEvent(addr, ar.result()));
+            registrationListener.registrationsUpdated(new RegistrationUpdateEvent(addr, ar.result()));
           } else {
             log.trace("A failure occured while retrieving the updated registrations", ar.cause());
-            nodeSelector.registrationsUpdated(new RegistrationUpdateEvent(addr, Collections.emptyList()));
+            registrationListener.registrationsUpdated(new RegistrationUpdateEvent(addr, Collections.emptyList()));
           }
         });
         break;
@@ -202,7 +202,7 @@ public class SubsMapHelper implements TreeCacheListener {
   }
 
   private void fireRegistrationUpdateEvent(String address) {
-    nodeSelector.registrationsUpdated(new RegistrationUpdateEvent(address, get(address)));
+    registrationListener.registrationsUpdated(new RegistrationUpdateEvent(address, get(address)));
   }
 
 }
