@@ -213,7 +213,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     try {
       Buffer buffer = Buffer.buffer();
       nodeInfo.writeToBuffer(buffer);
-      curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
+      curator.create().orSetData().creatingParentContainersIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
         if (e.getType() == CuratorEventType.SET_DATA || e.getType() == CuratorEventType.CREATE) {
           vertx.runOnContext(Avoid -> {
             localNodeInfo.put(nodeId, nodeInfo);
@@ -260,7 +260,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   private void createThisNode() throws Exception {
     try {
-      curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
+      curator.create().creatingParentContainersIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
     } catch (KeeperException.NodeExistsException e) {
       //idempotent
       log.info("node:" + nodeId + " have created successful.");

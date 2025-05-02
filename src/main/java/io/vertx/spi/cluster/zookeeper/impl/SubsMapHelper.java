@@ -18,6 +18,7 @@ import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 import org.apache.zookeeper.CreateMode;
 
+import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -130,6 +131,38 @@ public class SubsMapHelper implements TreeCacheListener {
         fireRegistrationUpdateEvent(address);
         promise.complete();
       } else {
+        //-> @wjw_add 删除指令来的早了,节点还不存在,这时候重试几次!
+        //@wjw_comment: 为何不用Watcher来监听?因为可能在创建Watcher的时候节点已经创建了,就监听不到了!
+        String nodeFullPath = fullPath.apply(address, registrationInfo);
+        if (curator.checkExists().forPath(nodeFullPath) == null) {
+          java.util.concurrent.atomic.AtomicInteger retryCount = new java.util.concurrent.atomic.AtomicInteger(0);
+          vertx.setPeriodic(100, 100, timerID -> {
+            try {
+              log.warn(MessageFormat.format("要删除的Zookeeper节点不存在:{0}, 重试第:{1}次!", nodeFullPath, retryCount.incrementAndGet()));
+              if (curator.checkExists().forPath(nodeFullPath) != null) {
+                vertx.cancelTimer(timerID);
+                curator.delete().guaranteed().forPath(nodeFullPath);
+                log.warn(MessageFormat.format("重试第:{0}次后,成功删除Zookeeper节点:{1}", retryCount.get(), nodeFullPath));
+                promise.complete();
+                return;
+              }
+              
+              if (retryCount.get() > 10) {
+                vertx.cancelTimer(timerID);
+                String errMessage = MessageFormat.format("重试{0}次后,要删除的Zookeeper节点还不存在:{1}", retryCount.get(), nodeFullPath);
+                log.warn(errMessage);
+                throw new IllegalStateException(errMessage); 
+              }
+            } catch (Exception e) {
+              log.error(e.getMessage(), e);
+              promise.fail(e);
+            }
+          });
+
+          return;
+        }
+        //<- @wjw_add
+        
         curator.delete().guaranteed().inBackground((c, e) -> {
           if (e.getType() == CuratorEventType.DELETE) {
             vertx.runOnContext(aVoid -> {
