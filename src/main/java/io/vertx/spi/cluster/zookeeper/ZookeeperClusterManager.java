@@ -16,10 +16,7 @@
 
 package io.vertx.spi.cluster.zookeeper;
 
-import io.vertx.core.Future;
-import io.vertx.core.Promise;
-import io.vertx.core.Vertx;
-import io.vertx.core.VertxException;
+import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.internal.VertxInternal;
 import io.vertx.core.internal.logging.Logger;
@@ -137,7 +134,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public <K, V> void getAsyncMap(String name, Promise<AsyncMap<K, V>> promise) {
+  public <K, V> void getAsyncMap(String name, Completable<AsyncMap<K, V>> promise) {
     vertx.<AsyncMap<K, V>>executeBlocking(() -> {
       @SuppressWarnings("unchecked")
       AsyncMap<K, V> zkAsyncMap = (AsyncMap<K, V>) asyncMapCache.computeIfAbsent(name, key -> new ZKAsyncMap<>(vertx, curator, name));
@@ -151,7 +148,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void getLockWithTimeout(String name, long timeout, Promise<Lock> promise) {
+  public void getLockWithTimeout(String name, long timeout, Completable<Lock> promise) {
     vertx.<Lock>executeBlocking(() -> {
       ZKLock lock = locks.get(name);
       if (lock == null) {
@@ -172,7 +169,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void getCounter(String name, Promise<Counter> promise) {
+  public void getCounter(String name, Completable<Counter> promise) {
     vertx.<Counter>executeBlocking(() -> {
       try {
         Objects.requireNonNull(name);
@@ -206,7 +203,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void setNodeInfo(NodeInfo nodeInfo, Promise<Void> promise) {
+  public void setNodeInfo(NodeInfo nodeInfo, Completable<Void> promise) {
     synchronized (this) {
       this.nodeInfo = nodeInfo;
     }
@@ -217,7 +214,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         if (e.getType() == CuratorEventType.SET_DATA || e.getType() == CuratorEventType.CREATE) {
           vertx.runOnContext(Avoid -> {
             localNodeInfo.put(nodeId, nodeInfo);
-            promise.complete();
+            promise.succeed();
           });
         }
       }).withUnhandledErrorListener(log::error).forPath(ZK_PATH_CLUSTER_NODE + nodeId, buffer.getBytes());
@@ -232,7 +229,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void getNodeInfo(String nodeId, Promise<NodeInfo> promise) {
+  public void getNodeInfo(String nodeId, Completable<NodeInfo> promise) {
     vertx.<NodeInfo>executeBlocking(() -> {
       return Optional.ofNullable(clusterNodes.getCurrentData(ZK_PATH_CLUSTER_NODE + nodeId))
         .map(childData -> {
@@ -268,7 +265,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void join(Promise<Void> promise) {
+  public void join(Completable<Void> promise) {
     vertx.<Void>executeBlocking(() -> {
       if (!active) {
         active = true;
@@ -317,7 +314,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void leave(Promise<Void> promise) {
+  public void leave(Completable<Void> promise) {
     vertx.<Void>executeBlocking(() -> {
       synchronized (ZookeeperClusterManager.this) {
         if (active) {
@@ -343,18 +340,25 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   @Override
-  public void addRegistration(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
-    subsMapHelper.put(address, registrationInfo, promise);
+  public void addRegistration(String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
+    System.out.println("ADD REGISTRATION " + address + " "  + registrationInfo);
+    subsMapHelper.put(address, registrationInfo, (res, err) -> {
+      System.out.println("ADD REG COMPLETE " + err);
+      promise.complete(null, err);
+    });
   }
 
   @Override
-  public void removeRegistration(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
+  public void removeRegistration(String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
     subsMapHelper.remove(address, registrationInfo, promise);
   }
 
   @Override
-  public void getRegistrations(String address, Promise<List<RegistrationInfo>> promise) {
-    vertx.executeBlocking(() -> subsMapHelper.get(address), false).onComplete(promise);
+  public void getRegistrations(String address, Completable<List<RegistrationInfo>> promise) {
+    vertx.executeBlocking(() -> subsMapHelper.get(address), false).onComplete(ar -> {
+      System.out.println("GET REG " + ar.result());
+      promise.complete(ar.result(), ar.cause());
+    });
   }
 
   @Override

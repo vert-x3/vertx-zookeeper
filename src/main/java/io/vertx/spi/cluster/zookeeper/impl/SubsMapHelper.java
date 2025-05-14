@@ -1,5 +1,6 @@
 package io.vertx.spi.cluster.zookeeper.impl;
 
+import io.vertx.core.Completable;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.VertxException;
@@ -59,11 +60,11 @@ public class SubsMapHelper implements TreeCacheListener {
     treeCache.close();
   }
 
-  public void put(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
+  public void put(String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
     if (registrationInfo.localOnly()) {
       localSubs.compute(address, (add, curr) -> addToSet(registrationInfo, curr));
       fireRegistrationUpdateEvent(address);
-      promise.complete();
+      promise.succeed();
     } else {
       try {
         Buffer buffer = Buffer.buffer();
@@ -72,7 +73,7 @@ public class SubsMapHelper implements TreeCacheListener {
           if (e.getType() == CuratorEventType.CREATE || e.getType() == CuratorEventType.SET_DATA) {
             vertx.runOnContext(Avoid -> {
               ownSubs.compute(address, (add, curr) -> addToSet(registrationInfo, curr));
-              promise.complete();
+              promise.succeed();
             });
           }
         }).withUnhandledErrorListener(log::error).forPath(fullPath.apply(address, registrationInfo), buffer.getBytes());
@@ -123,18 +124,18 @@ public class SubsMapHelper implements TreeCacheListener {
     return registrationInfo;
   }
 
-  public void remove(String address, RegistrationInfo registrationInfo, Promise<Void> promise) {
+  public void remove(String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
     try {
       if (registrationInfo.localOnly()) {
         localSubs.computeIfPresent(address, (add, curr) -> removeFromSet(registrationInfo, curr));
         fireRegistrationUpdateEvent(address);
-        promise.complete();
+        promise.succeed();
       } else {
         curator.delete().guaranteed().inBackground((c, e) -> {
           if (e.getType() == CuratorEventType.DELETE) {
             vertx.runOnContext(aVoid -> {
               ownSubs.computeIfPresent(address, (add, curr) -> removeFromSet(registrationInfo, curr));
-              promise.complete();
+              promise.succeed();
             });
           }
         }).forPath(fullPath.apply(address, registrationInfo));
