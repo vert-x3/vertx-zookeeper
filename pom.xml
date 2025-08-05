@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>vertx-zookeeper</artifactId>
-  <version>5.0.2-SNAPSHOT</version>
+  <version>5.0.2</version>
   <name>Vert.x Zookeeper Cluster Manager</name>
 
   <properties>
