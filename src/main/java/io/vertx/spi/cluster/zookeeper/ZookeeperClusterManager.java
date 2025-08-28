@@ -341,9 +341,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void addRegistration(String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
-    System.out.println("ADD REGISTRATION " + address + " "  + registrationInfo);
     subsMapHelper.put(address, registrationInfo, (res, err) -> {
-      System.out.println("ADD REG COMPLETE " + err);
       promise.complete(null, err);
     });
   }
@@ -356,7 +354,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   @Override
   public void getRegistrations(String address, Completable<List<RegistrationInfo>> promise) {
     vertx.executeBlocking(() -> subsMapHelper.get(address), false).onComplete(ar -> {
-      System.out.println("GET REG " + ar.result());
       promise.complete(ar.result(), ar.cause());
     });
   }
