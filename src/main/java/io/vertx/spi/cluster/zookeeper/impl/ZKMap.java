@@ -34,7 +34,7 @@ import org.apache.zookeeper.data.Stat;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
-import java.util.Base64;
+
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -233,7 +233,13 @@ abstract class ZKMap<K, V> {
         : curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT);
       creator.inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
-          vertx.runOnContext(aVoid -> future.complete(el.getStat()));
+          KeeperException.Code code = KeeperException.Code.get(el.getResultCode());
+          if (code == KeeperException.Code.OK) {
+            vertx.runOnContext(aVoid -> future.complete(el.getStat()));
+          } else {
+            KeeperException ex = KeeperException.create(code, path);
+            vertx.runOnContext(aVoid -> future.fail(ex));
+          }
         }
       }).forPath(path, asByte(v));
     } catch (Exception ex) {
