@@ -31,8 +31,8 @@ public class ZKClusteredSessionHandlerTest extends ClusteredSessionHandlerTest {
   private MockZKCluster zkClustered = new MockZKCluster();
 
   @Override
-  public void tearDown(VertxTestContext testContext) throws Exception {
-    super.tearDown(testContext);
+  public void tearDown() throws Exception {
+    super.tearDown();
     zkClustered.stop();
   }
 
