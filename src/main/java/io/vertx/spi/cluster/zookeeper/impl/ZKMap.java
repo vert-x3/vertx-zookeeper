@@ -20,6 +20,9 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
 import io.vertx.core.buffer.Buffer;
+import io.vertx.core.buffer.impl.BufferImpl;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.ClusterSerializable;
 import org.apache.curator.RetryLoop;
 import org.apache.curator.RetryPolicy;
@@ -86,9 +89,60 @@ abstract class ZKMap<K, V> {
     return assertKeyIsNotNull(key).compose(aVoid -> assertValueIsNotNull(value));
   }
 
+  private static class JsonObjectSupport implements ClusterSerializable {
+
+    private JsonObject value;
+
+    public JsonObjectSupport(JsonObject value) {
+      this.value = value;
+    }
+
+    public JsonObjectSupport() {
+      this.value = new JsonObject();
+    }
+
+    @Override
+    public void writeToBuffer(Buffer buffer) {
+      value.writeToBuffer(buffer);
+    }
+
+    @Override
+    public int readFromBuffer(int pos, Buffer buffer) {
+      return value.readFromBuffer(pos, buffer);
+    }
+  }
+
+  private static class JsonArraySupport implements ClusterSerializable {
+
+    private JsonArray value;
+
+    public JsonArraySupport(JsonArray value) {
+      this.value = value;
+    }
+
+    public JsonArraySupport() {
+      this.value = new JsonArray();
+    }
+
+    @Override
+    public void writeToBuffer(Buffer buffer) {
+      value.writeToBuffer(buffer);
+    }
+
+    @Override
+    public int readFromBuffer(int pos, Buffer buffer) {
+      return value.readFromBuffer(pos, buffer);
+    }
+  }
+
   byte[] asByte(Object object) throws IOException {
     ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
     DataOutput dataOutput = new DataOutputStream(byteOut);
+    if (object instanceof JsonObject) {
+      object = new JsonObjectSupport((JsonObject) object);
+    } else if (object instanceof JsonArray) {
+      object = new JsonArraySupport((JsonArray) object);
+    }
     if (object instanceof ClusterSerializable) {
       ClusterSerializable clusterSerializable = (ClusterSerializable) object;
       dataOutput.writeBoolean(true);
@@ -130,7 +184,13 @@ abstract class ZKMap<K, V> {
           clusterSerializable = (ClusterSerializable) clazz.newInstance();
         }
         clusterSerializable.readFromBuffer(0, Buffer.buffer(body));
-        return (T) clusterSerializable;
+        if (clusterSerializable instanceof JsonObjectSupport) {
+          return (T)((JsonObjectSupport) clusterSerializable).value;
+        } else if (clusterSerializable instanceof JsonArraySupport) {
+          return (T)((JsonArraySupport) clusterSerializable).value;
+        } else {
+          return (T) clusterSerializable;
+        }
       } catch (Exception e) {
         throw new IllegalStateException("Failed to load class " + e.getMessage(), e);
       }

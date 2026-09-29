@@ -21,6 +21,7 @@ import io.vertx.core.Handler;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
 import io.vertx.test.core.TestUtils;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Map;
@@ -55,15 +56,15 @@ public class ZKClusteredEventbusTest extends io.vertx.tests.eventbus.ClusteredEv
 
     MessageConsumer<T> reg = vertices[1].eventBus().<T>consumer(ADDRESS1).handler((Message<T> msg) -> {
       if (consumer == null) {
-        assertTrue(msg.isSend());
-        assertEquals(received, msg.body());
+        Assert.assertTrue(msg.isSend());
+        Assert.assertEquals(received, msg.body());
         if (options != null) {
-          assertNotNull(msg.headers());
+          Assert.assertNotNull(msg.headers());
           int numHeaders = options.getHeaders() != null ? options.getHeaders().size() : 0;
-          assertEquals(numHeaders, msg.headers().size());
+          Assert.assertEquals(numHeaders, msg.headers().size());
           if (numHeaders != 0) {
             for (Map.Entry<String, String> entry : options.getHeaders().entries()) {
-              assertEquals(msg.headers().get(entry.getKey()), entry.getValue());
+              Assert.assertEquals(msg.headers().get(entry.getKey()), entry.getValue());
             }
           }
         }
@@ -73,7 +74,7 @@ public class ZKClusteredEventbusTest extends io.vertx.tests.eventbus.ClusteredEv
       testComplete();
     });
     reg.completion().onComplete(ar -> {
-      assertTrue(ar.succeeded());
+      Assert.assertTrue(ar.succeeded());
       vertices[1].setTimer(200L, along -> {
         if (options == null) {
           vertices[0].eventBus().send(ADDRESS1, val);
@@ -92,7 +93,7 @@ public class ZKClusteredEventbusTest extends io.vertx.tests.eventbus.ClusteredEv
     }
     String str = TestUtils.randomUnicodeString(1000);
     MessageConsumer<?> reg = vertices[1].eventBus().consumer(ADDRESS1).handler(msg -> {
-      assertEquals(str, msg.body());
+      Assert.assertEquals(str, msg.body());
       if (options == null) {
         msg.reply(val);
       } else {
@@ -100,17 +101,17 @@ public class ZKClusteredEventbusTest extends io.vertx.tests.eventbus.ClusteredEv
       }
     });
     reg.completion().onComplete(ar -> {
-      assertTrue(ar.succeeded());
+      Assert.assertTrue(ar.succeeded());
       vertices[1].setTimer(200L, along -> {
         vertices[0].eventBus().<R>request(ADDRESS1, str).onComplete(onSuccess((Message<R> reply) -> {
           if (consumer == null) {
-            assertTrue(reply.isSend());
-            assertEquals(received, reply.body());
+            Assert.assertTrue(reply.isSend());
+            Assert.assertEquals(received, reply.body());
             if (options != null && options.getHeaders() != null) {
-              assertNotNull(reply.headers());
-              assertEquals(options.getHeaders().size(), reply.headers().size());
+              Assert.assertNotNull(reply.headers());
+              Assert.assertEquals(options.getHeaders().size(), reply.headers().size());
               for (Map.Entry<String, String> entry : options.getHeaders().entries()) {
-                assertEquals(reply.headers().get(entry.getKey()), entry.getValue());
+                Assert.assertEquals(reply.headers().get(entry.getKey()), entry.getValue());
               }
             }
           } else {
@@ -146,8 +147,8 @@ public class ZKClusteredEventbusTest extends io.vertx.tests.eventbus.ClusteredEv
       @Override
       public void handle(Message<T> msg) {
         if (consumer == null) {
-          assertFalse(msg.isSend());
-          assertEquals(val, msg.body());
+          Assert.assertFalse(msg.isSend());
+          Assert.assertEquals(val, msg.body());
         } else {
           consumer.accept(msg.body());
         }
@@ -160,7 +161,7 @@ public class ZKClusteredEventbusTest extends io.vertx.tests.eventbus.ClusteredEv
     class MyRegisterHandler implements Handler<AsyncResult<Void>> {
       @Override
       public void handle(AsyncResult<Void> ar) {
-        assertTrue(ar.succeeded());
+        Assert.assertTrue(ar.succeeded());
         if (registerCount.incrementAndGet() == 2) {
           vertices[0].setTimer(300L, h -> {
             vertices[0].eventBus().publish(ADDRESS1, val);

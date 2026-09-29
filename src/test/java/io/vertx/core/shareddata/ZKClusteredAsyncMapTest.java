@@ -19,6 +19,7 @@ package io.vertx.core.shareddata;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
+import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -42,7 +43,7 @@ public class ZKClusteredAsyncMapTest extends io.vertx.tests.shareddata.Clustered
         map.replaceIfPresent("key", "old", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
-            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            Assert.assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
             complete();
           });
       }));
@@ -56,7 +57,7 @@ public class ZKClusteredAsyncMapTest extends io.vertx.tests.shareddata.Clustered
         map.replaceIfPresent("key", "old", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
-            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            Assert.assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
             complete();
           });
       }));
@@ -70,7 +71,7 @@ public class ZKClusteredAsyncMapTest extends io.vertx.tests.shareddata.Clustered
         map.replace("key", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
-            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            Assert.assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
             complete();
           });
       }));
@@ -84,7 +85,7 @@ public class ZKClusteredAsyncMapTest extends io.vertx.tests.shareddata.Clustered
         map.replace("key", "new", 100)
           .onSuccess(b -> fail("operation should not be implemented"))
           .onFailure(t -> {
-            assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
+            Assert.assertTrue("operation not implemented", t instanceof UnsupportedOperationException);
             complete();
           });
       }));
@@ -100,7 +101,7 @@ public class ZKClusteredAsyncMapTest extends io.vertx.tests.shareddata.Clustered
   public void testStoreAndGetBuffer() {
     getVertx().sharedData().<String, Buffer>getAsyncMap("foo").onComplete(onSuccess(map -> {
       map.put("test", Buffer.buffer().appendString("Hello")).onComplete(onSuccess(putResult -> map.get("test").onComplete(onSuccess(myBuffer -> {
-        assertEquals("Hello", myBuffer.toString());
+        Assert.assertEquals("Hello", myBuffer.toString());
         testComplete();
       }))));
     }));
