@@ -270,47 +270,50 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       if (!active) {
         active = true;
         lockReleaseExec = Executors.newCachedThreadPool(r -> new Thread(r, "vertx-zookeeper-service-release-lock-thread"));
-
-        //The curator instance has been passed using the constructor.
-        if (customCuratorCluster) {
+        try {
+          //The curator instance has been passed using the constructor.
+          if (!customCuratorCluster) {
+            startCurator();
+          }
           addLocalNodeId();
-          return null;
+        } catch (Exception e) {
+          // Allow to join again
+          active = false;
+          close(false);
+          throw e;
         }
-
-        if (curator == null) {
-          retryPolicy = RetryPolicyHelper.createRetryPolicy(conf.getJsonObject("retry", new JsonObject()));
-
-          // Read the zookeeper hosts from a system variable
-          String hosts = System.getProperty("vertx.zookeeper.hosts");
-          if (hosts == null) {
-            hosts = conf.getString("zookeeperHosts", "127.0.0.1");
-          }
-          log.info("Zookeeper hosts set to " + hosts);
-
-          curator = CuratorFrameworkFactory.builder()
-            .connectString(hosts)
-            .namespace(conf.getString("rootPath", "io.vertx"))
-            .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
-            .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
-            .retryPolicy(retryPolicy).build();
-        }
-        curator.start();
-        while (curator.getState() != CuratorFrameworkState.STARTED) {
-          try {
-            Thread.sleep(100);
-          } catch (InterruptedException e) {
-            if (curator.getState() != CuratorFrameworkState.STARTED) {
-              throw new VertxException("zookeeper client being interrupted while starting.", true);
-            }
-          }
-        }
-        nodeId = UUID.randomUUID().toString();
-        addLocalNodeId();
-        return null;
-      } else {
-        return null;
       }
+      return null;
     }).onComplete(promise);
+  }
+
+  private void startCurator() {
+    retryPolicy = RetryPolicyHelper.createRetryPolicy(conf.getJsonObject("retry", new JsonObject()));
+
+    // Read the zookeeper hosts from a system variable
+    String hosts = System.getProperty("vertx.zookeeper.hosts");
+    if (hosts == null) {
+      hosts = conf.getString("zookeeperHosts", "127.0.0.1");
+    }
+    log.info("Zookeeper hosts set to " + hosts);
+
+    curator = CuratorFrameworkFactory.builder()
+      .connectString(hosts)
+      .namespace(conf.getString("rootPath", "io.vertx"))
+      .sessionTimeoutMs(conf.getInteger("sessionTimeout", 20000))
+      .connectionTimeoutMs(conf.getInteger("connectTimeout", 3000))
+      .retryPolicy(retryPolicy).build();
+    curator.start();
+    while (curator.getState() != CuratorFrameworkState.STARTED) {
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        if (curator.getState() != CuratorFrameworkState.STARTED) {
+          throw new VertxException("zookeeper client being interrupted while starting.", true);
+        }
+      }
+    }
+    nodeId = UUID.randomUUID().toString();
   }
 
   @Override
@@ -319,19 +322,37 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       synchronized (ZookeeperClusterManager.this) {
         if (active) {
           active = false;
-          joined = false;
-          lockReleaseExec.shutdown();
-          try {
-            clusterNodes.close();
-            subsMapHelper.close();
-            curator.close();
-          } catch (Exception e) {
-            log.warn("zookeeper close exception.", e);
-          }
+          close(true);
         }
         return null;
       }
     }).onComplete(promise);
+  }
+
+  /**
+   * Release the resources of this node, so it can join again.
+   *
+   * @param closeCustomCurator whether to close the curator instance passed using the constructor
+   */
+  private void close(boolean closeCustomCurator) {
+    joined = false;
+    lockReleaseExec.shutdown();
+    locks.clear();
+    // Maps hold the curator instance
+    asyncMapCache.clear();
+    try {
+      if (subsMapHelper != null) {
+        subsMapHelper.close();
+      }
+      if (clusterNodes != null) {
+        clusterNodes.close();
+      }
+      if (curator != null && (closeCustomCurator || !customCuratorCluster)) {
+        curator.close();
+      }
+    } catch (Exception e) {
+      log.warn("zookeeper close exception.", e);
+    }
   }
 
   @Override
