@@ -353,7 +353,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
 
   @Override
   public void getRegistrations(String address, Completable<List<RegistrationInfo>> promise) {
-    vertx.executeBlocking(() -> subsMapHelper.get(address), false).onComplete(ar -> {
+    vertx.executeBlocking(() -> subsMapHelper.read(address), false).onComplete(ar -> {
       promise.complete(ar.result(), ar.cause());
     });
   }
