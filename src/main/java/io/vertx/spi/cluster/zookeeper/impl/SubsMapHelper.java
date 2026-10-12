@@ -20,6 +20,9 @@ import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +45,7 @@ public class SubsMapHelper implements TreeCacheListener {
   private static final Logger log = LoggerFactory.getLogger(SubsMapHelper.class);
   private static final long SYNC_TIMEOUT_MS = 10_000;
 
-  private static final Function<String, String> keyPath = address -> VERTX_SUBS_NAME + "/" + address;
+  private static final Function<String, String> keyPath = address -> VERTX_SUBS_NAME + "/" + encodeAddress(address);
   private static final Function<RegistrationInfo, String> valuePath = registrationInfo -> registrationInfo.nodeId() + "-" + registrationInfo.seq();
   private static final BiFunction<String, RegistrationInfo, String> fullPath = (address, registrationInfo) -> keyPath.apply(address) + "/" + valuePath.apply(registrationInfo);
 
@@ -197,7 +200,7 @@ public class SubsMapHelper implements TreeCacheListener {
           // "/__vertx.subs" and "/__vertx.subs/XX" added event
           break;
         }
-        String addr = pathElements[2];
+        String addr = decodeAddress(pathElements[2]);
         vertx.<List<RegistrationInfo>>executeBlocking(() -> get(addr), false).onComplete(ar -> {
           if (ar.succeeded()) {
             registrationListener.registrationsUpdated(new RegistrationUpdateEvent(addr, ar.result()));
@@ -234,6 +237,21 @@ public class SubsMapHelper implements TreeCacheListener {
         });
         break;
     }
+  }
+
+  /**
+   * Encode an event bus address to a valid ZooKeeper node name.
+   */
+  static String encodeAddress(String address) {
+    if (address.equals(".") || address.equals("..")) {
+      // Not encoded by URLEncoder and reserved by ZooKeeper
+      return address.replace(".", "%2E");
+    }
+    return URLEncoder.encode(address, StandardCharsets.UTF_8);
+  }
+
+  static String decodeAddress(String name) {
+    return URLDecoder.decode(name, StandardCharsets.UTF_8);
   }
 
   private void fireRegistrationUpdateEvent(String address) {
