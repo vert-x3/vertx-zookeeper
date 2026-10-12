@@ -404,8 +404,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
         locks.values().forEach(ZKLock::release);
         break;
       case CONNECTION_LOST:
-        //release locks and clean locks
-        joined = false;
+        //release locks and clean locks, the node is recreated when the connection is reestablished
         locks.values().forEach(ZKLock::release);
         locks.clear();
         break;
