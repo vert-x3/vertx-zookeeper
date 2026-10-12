@@ -19,6 +19,7 @@ package io.vertx.ext.web.sstore;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.ext.web.it.sstore.ClusteredSessionHandlerTest;
 import io.vertx.spi.cluster.zookeeper.MockZKCluster;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -29,6 +30,7 @@ public class ZKClusteredSessionHandlerTest extends ClusteredSessionHandlerTest {
 
   private MockZKCluster zkClustered = new MockZKCluster();
 
+  @AfterEach
   @Override
   public void tearDown() throws Exception {
     super.tearDown();

@@ -20,7 +20,6 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.buffer.impl.BufferImpl;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.ClusterSerializable;

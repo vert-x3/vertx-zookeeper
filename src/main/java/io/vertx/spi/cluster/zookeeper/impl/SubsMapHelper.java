@@ -18,10 +18,13 @@ import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheListener;
 import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -37,6 +40,7 @@ public class SubsMapHelper implements TreeCacheListener {
 
   private static final String VERTX_SUBS_NAME = "/__vertx.subs";
   private static final Logger log = LoggerFactory.getLogger(SubsMapHelper.class);
+  private static final long SYNC_TIMEOUT_MS = 10_000;
 
   private static final Function<String, String> keyPath = address -> VERTX_SUBS_NAME + "/" + address;
   private static final Function<RegistrationInfo, String> valuePath = registrationInfo -> registrationInfo.nodeId() + "-" + registrationInfo.seq();
@@ -89,37 +93,67 @@ public class SubsMapHelper implements TreeCacheListener {
     return res;
   }
 
+  /**
+   * Get the registrations of an {@code address} from the local cache, this view might lag behind ZooKeeper.
+   */
   public List<RegistrationInfo> get(String address) {
     Map<String, ChildData> map = treeCache.getCurrentChildren(keyPath.apply(address));
     Collection<ChildData> remote = (map == null) ? Collections.emptyList() : map.values();
-
-    List<RegistrationInfo> list;
-    int size;
-    size = remote.size();
-    Set<RegistrationInfo> local = localSubs.get(address);
-    if (local != null) {
-      synchronized (local) {
-        size += local.size();
-        if (size == 0) {
-          return Collections.emptyList();
-        }
-        list = new ArrayList<>(size);
-        list.addAll(local);
-      }
-    } else if (size == 0) {
-      return Collections.emptyList();
-    } else {
-      list = new ArrayList<>(size);
-    }
+    List<RegistrationInfo> list = localRegistrations(address, remote.size());
     for (ChildData childData : remote) {
-      list.add(toRegistrationInfo(childData));
+      list.add(toRegistrationInfo(childData.getData()));
     }
     return list;
   }
 
-  private static RegistrationInfo toRegistrationInfo(ChildData childData) {
+  /**
+   * Get the registrations of an {@code address} reading ZooKeeper, this view includes registrations
+   * completed on other nodes before this call. This method blocks.
+   */
+  public List<RegistrationInfo> read(String address) throws Exception {
+    String path = keyPath.apply(address);
+    sync(path);
+    List<String> children;
+    try {
+      children = curator.getChildren().forPath(path);
+    } catch (KeeperException.NoNodeException e) {
+      children = Collections.emptyList();
+    }
+    List<RegistrationInfo> list = localRegistrations(address, children.size());
+    for (String child : children) {
+      byte[] data;
+      try {
+        data = curator.getData().forPath(path + "/" + child);
+      } catch (KeeperException.NoNodeException e) {
+        // Removed concurrently
+        continue;
+      }
+      list.add(toRegistrationInfo(data));
+    }
+    return list;
+  }
+
+  private List<RegistrationInfo> localRegistrations(String address, int extra) {
+    Set<RegistrationInfo> local = localSubs.get(address);
+    if (local == null) {
+      return new ArrayList<>(extra);
+    }
+    synchronized (local) {
+      List<RegistrationInfo> list = new ArrayList<>(local.size() + extra);
+      list.addAll(local);
+      return list;
+    }
+  }
+
+  private void sync(String path) throws Exception {
+    CompletableFuture<Void> fut = new CompletableFuture<>();
+    curator.sync().inBackground((client, event) -> fut.complete(null)).forPath(path);
+    fut.get(SYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+  }
+
+  private static RegistrationInfo toRegistrationInfo(byte[] data) {
     RegistrationInfo registrationInfo = new RegistrationInfo();
-    Buffer buffer = Buffer.buffer(childData.getData());
+    Buffer buffer = Buffer.buffer(data);
     registrationInfo.readFromBuffer(0, buffer);
     return registrationInfo;
   }
