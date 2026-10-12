@@ -43,8 +43,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -84,6 +84,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   private static final String ZK_PATH_LOCKS = "/locks/";
   private static final String ZK_PATH_CLUSTER_NODE = "/cluster/nodes/";
   private static final String ZK_PATH_CLUSTER_NODE_WITHOUT_SLASH = "/cluster/nodes";
+  private static final long SYNC_TIMEOUT_MS = 10_000;
 
   private ExecutorService lockReleaseExec;
 
@@ -208,8 +209,6 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       this.nodeInfo = nodeInfo;
     }
     try {
-      Buffer buffer = Buffer.buffer();
-      nodeInfo.writeToBuffer(buffer);
       curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
         if (e.getType() == CuratorEventType.SET_DATA || e.getType() == CuratorEventType.CREATE) {
           vertx.runOnContext(Avoid -> {
@@ -217,7 +216,7 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
             promise.succeed();
           });
         }
-      }).withUnhandledErrorListener(log::error).forPath(ZK_PATH_CLUSTER_NODE + nodeId, buffer.getBytes());
+      }).withUnhandledErrorListener(log::error).forPath(ZK_PATH_CLUSTER_NODE + nodeId, toBytes(nodeInfo));
     } catch (Exception e) {
       log.error("create node failed.", e);
     }
@@ -231,14 +230,34 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   @Override
   public void getNodeInfo(String nodeId, Completable<NodeInfo> promise) {
     vertx.<NodeInfo>executeBlocking(() -> {
-      return Optional.ofNullable(clusterNodes.getCurrentData(ZK_PATH_CLUSTER_NODE + nodeId))
-        .map(childData -> {
-            Buffer buffer = Buffer.buffer(childData.getData());
-            NodeInfo nodeInfo = new NodeInfo();
-            nodeInfo.readFromBuffer(0, buffer);
-            return nodeInfo;
-          }).orElseThrow(() -> new VertxException("Not a member of the cluster", true));
+      // Read ZooKeeper, the cache might not reflect yet the node info set by the node
+      String path = ZK_PATH_CLUSTER_NODE + nodeId;
+      byte[] data;
+      try {
+        sync(path);
+        data = curator.getData().forPath(path);
+      } catch (KeeperException.NoNodeException e) {
+        throw new VertxException("Not a member of the cluster", true);
+      }
+      if (data == null || data.length == 0) {
+        throw new VertxException("Node info of " + nodeId + " is not available", true);
+      }
+      NodeInfo nodeInfo = new NodeInfo();
+      nodeInfo.readFromBuffer(0, Buffer.buffer(data));
+      return nodeInfo;
     }, false).onComplete(promise);
+  }
+
+  private void sync(String path) throws Exception {
+    CompletableFuture<Void> fut = new CompletableFuture<>();
+    curator.sync().inBackground((client, event) -> fut.complete(null)).forPath(path);
+    fut.get(SYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+  }
+
+  private static byte[] toBytes(NodeInfo nodeInfo) {
+    Buffer buffer = Buffer.buffer();
+    nodeInfo.writeToBuffer(buffer);
+    return buffer.getBytes();
   }
 
   private void addLocalNodeId() throws VertxException {
@@ -256,8 +275,11 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
   }
 
   private void createThisNode() throws Exception {
+    // Empty until the node info is set, so other nodes never read something else than a node info
+    NodeInfo current = getNodeInfo();
+    byte[] data = current != null ? toBytes(current) : new byte[0];
     try {
-      curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, nodeId.getBytes());
+      curator.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(ZK_PATH_CLUSTER_NODE + nodeId, data);
     } catch (KeeperException.NodeExistsException e) {
       //idempotent
       log.info("node:" + nodeId + " have created successful.");
