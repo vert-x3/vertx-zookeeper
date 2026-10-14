@@ -30,7 +30,6 @@ import io.vertx.spi.cluster.zookeeper.impl.*;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
@@ -208,17 +207,27 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
     synchronized (this) {
       this.nodeInfo = nodeInfo;
     }
+    // Completed once, either by the callback or by the error listener
+    Promise<Void> result = Promise.promise();
+    result.future().onComplete(promise);
     try {
       curator.create().orSetData().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
-        if (e.getType() == CuratorEventType.SET_DATA || e.getType() == CuratorEventType.CREATE) {
+        KeeperException.Code code = KeeperException.Code.get(e.getResultCode());
+        if (code == KeeperException.Code.OK) {
           vertx.runOnContext(Avoid -> {
             localNodeInfo.put(nodeId, nodeInfo);
-            promise.succeed();
+            result.tryComplete();
           });
+        } else {
+          result.tryFail(KeeperException.create(code, e.getPath()));
         }
-      }).withUnhandledErrorListener(log::error).forPath(ZK_PATH_CLUSTER_NODE + nodeId, toBytes(nodeInfo));
+      }).withUnhandledErrorListener((message, err) -> {
+        log.error(message, err);
+        result.tryFail(err);
+      }).forPath(ZK_PATH_CLUSTER_NODE + nodeId, toBytes(nodeInfo));
     } catch (Exception e) {
       log.error("create node failed.", e);
+      result.tryFail(e);
     }
   }
 

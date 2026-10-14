@@ -12,7 +12,6 @@ import io.vertx.core.spi.cluster.RegistrationInfo;
 import io.vertx.core.spi.cluster.RegistrationListener;
 import io.vertx.core.spi.cluster.RegistrationUpdateEvent;
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
@@ -73,19 +72,29 @@ public class SubsMapHelper implements TreeCacheListener {
       fireRegistrationUpdateEvent(address);
       promise.succeed();
     } else {
+      // Completed once, either by the callback or by the error listener
+      Promise<Void> result = Promise.promise();
+      result.future().onComplete(promise);
       try {
         Buffer buffer = Buffer.buffer();
         registrationInfo.writeToBuffer(buffer);
         curator.create().orSetData().creatingParentContainersIfNeeded().withMode(CreateMode.EPHEMERAL).inBackground((c, e) -> {
-          if (e.getType() == CuratorEventType.CREATE || e.getType() == CuratorEventType.SET_DATA) {
+          KeeperException.Code code = KeeperException.Code.get(e.getResultCode());
+          if (code == KeeperException.Code.OK) {
             vertx.runOnContext(Avoid -> {
               ownSubs.compute(address, (add, curr) -> addToSet(registrationInfo, curr));
-              promise.succeed();
+              result.tryComplete();
             });
+          } else {
+            result.tryFail(KeeperException.create(code, e.getPath()));
           }
-        }).withUnhandledErrorListener(log::error).forPath(fullPath.apply(address, registrationInfo), buffer.getBytes());
+        }).withUnhandledErrorListener((message, err) -> {
+          log.error(message, err);
+          result.tryFail(err);
+        }).forPath(fullPath.apply(address, registrationInfo), buffer.getBytes());
       } catch (Exception e) {
         log.error(String.format("create subs address %s failed.", address), e);
+        result.tryFail(e);
       }
     }
   }
@@ -162,24 +171,34 @@ public class SubsMapHelper implements TreeCacheListener {
   }
 
   public void remove(String address, RegistrationInfo registrationInfo, Completable<Void> promise) {
+    // Completed once, either by the callback or by the error listener
+    Promise<Void> result = Promise.promise();
+    result.future().onComplete(promise);
     try {
       if (registrationInfo.localOnly()) {
         localSubs.computeIfPresent(address, (add, curr) -> removeFromSet(registrationInfo, curr));
         fireRegistrationUpdateEvent(address);
-        promise.succeed();
+        result.tryComplete();
       } else {
         curator.delete().guaranteed().inBackground((c, e) -> {
-          if (e.getType() == CuratorEventType.DELETE) {
+          KeeperException.Code code = KeeperException.Code.get(e.getResultCode());
+          // Already removed, e.g. by a session expiry
+          if (code == KeeperException.Code.OK || code == KeeperException.Code.NONODE) {
             vertx.runOnContext(aVoid -> {
               ownSubs.computeIfPresent(address, (add, curr) -> removeFromSet(registrationInfo, curr));
-              promise.succeed();
+              result.tryComplete();
             });
+          } else {
+            result.tryFail(KeeperException.create(code, e.getPath()));
           }
+        }).withUnhandledErrorListener((message, err) -> {
+          log.error(message, err);
+          result.tryFail(err);
         }).forPath(fullPath.apply(address, registrationInfo));
       }
     } catch (Exception e) {
       log.error(String.format("remove subs address %s failed.", address), e);
-      promise.fail(e);
+      result.tryFail(e);
     }
   }
 
