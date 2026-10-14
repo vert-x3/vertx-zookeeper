@@ -22,11 +22,13 @@ import io.vertx.core.internal.VertxInternal;
 import io.vertx.core.shareddata.AsyncMap;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorEventType;
+import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.data.Stat;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Predicate;
 
 /**
  * Created by Stream.Liu
@@ -91,57 +93,82 @@ public class ZKAsyncMap<K, V> extends ZKMap<K, V> implements AsyncMap<K, V> {
 
   private Future<V> putIfAbsent(K k, V v, Optional<Long> timeoutOptional) {
     return assertKeyAndValueAreNotNull(k, v)
-      .compose(aVoid -> get(k))
-      .compose(value -> {
-        if (value == null) {
-          if (timeoutOptional.isPresent()) {
-            return put(k, v, timeoutOptional).compose(aVoid -> Future.succeededFuture(null));
-          } else {
-            return put(k, v).compose(aVoid -> Future.succeededFuture(null));
+      .compose(aVoid -> vertx.executeBlocking(() -> {
+        String path = keyPath(k);
+        byte[] bytes = asByte(v);
+        sync(path);
+        long startTime = Instant.now().toEpochMilli();
+        for (int retries = 0; ; awaitRetry(retries++, startTime)) {
+          try {
+            // Only one creation succeeds
+            creator(timeoutOptional).forPath(path, bytes);
+            return null;
+          } catch (KeeperException.NodeExistsException e) {
+            Stat stat = new Stat();
+            V current;
+            try {
+              current = asObject(curator.getData().storingStatIn(stat).forPath(path));
+            } catch (KeeperException.NoNodeException removed) {
+              continue;
+            }
+            if (current != null) {
+              return current;
+            }
+            // The entry holds no value
+            try {
+              curator.setData().withVersion(stat.getVersion()).forPath(path, bytes);
+              return null;
+            } catch (KeeperException.BadVersionException | KeeperException.NoNodeException changed) {
+              // Try again
+            }
           }
-        } else {
-          return Future.succeededFuture(value);
         }
-      });
+      }, false));
   }
 
   @Override
   public Future<V> remove(K k) {
-    return assertKeyIsNotNull(k).compose(aVoid -> {
-      Promise<V> promise = Promise.promise();
-      get(k).onComplete(promise);
-      return promise.future();
-    }).compose(value -> {
-      Promise<V> promise = Promise.promise();
-      if (value != null) {
-        return delete(k, value);
-      } else {
-        promise.complete();
-      }
-      return promise.future();
-    });
+    return assertKeyIsNotNull(k)
+      .compose(aVoid -> vertx.executeBlocking(() -> removeIf(k, value -> true), false));
   }
 
   @Override
   public Future<Boolean> removeIfPresent(K k, V v) {
     return assertKeyAndValueAreNotNull(k, v)
-      .compose(aVoid -> {
-        Promise<V> promise = Promise.promise();
-        get(k).onComplete(promise);
-        return promise.future();
-      })
-      .compose(value -> {
-        Promise<Boolean> promise = Promise.promise();
-        if (Objects.equals(value, v)) {
-          delete(k, v).onComplete(deleteResult -> {
-            if (deleteResult.succeeded()) promise.complete(true);
-            else promise.fail(deleteResult.cause());
-          });
-        } else {
-          promise.complete(false);
-        }
-        return promise.future();
-      });
+      .compose(aVoid -> vertx.executeBlocking(() -> removeIf(k, v::equals) != null, false));
+  }
+
+  /**
+   * Remove the entry of {@code k} when its value matches, only the caller deleting the version of the value read
+   * removes it, others retry according to the retry policy.
+   *
+   * @return the removed value or {@code null}
+   */
+  private V removeIf(K k, Predicate<V> predicate) throws Exception {
+    String path = keyPath(k);
+    sync(path);
+    long startTime = Instant.now().toEpochMilli();
+    for (int retries = 0; ; awaitRetry(retries++, startTime)) {
+      Stat stat = new Stat();
+      V current;
+      try {
+        current = asObject(curator.getData().storingStatIn(stat).forPath(path));
+      } catch (KeeperException.NoNodeException e) {
+        return null;
+      }
+      if (current == null || !predicate.test(current)) {
+        return null;
+      }
+      try {
+        curator.delete().withVersion(stat.getVersion()).forPath(path);
+      } catch (KeeperException.BadVersionException e) {
+        continue;
+      } catch (KeeperException.NoNodeException e) {
+        return null;
+      }
+      deleteMapIfEmpty();
+      return current;
+    }
   }
 
   @Override
