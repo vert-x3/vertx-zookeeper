@@ -38,6 +38,8 @@ import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -57,6 +59,8 @@ abstract class ZKMap<K, V> {
     if (path.contains("/")) throw new IllegalArgumentException("can not contain forward slash char in ZK node path");
     return true;
   };
+
+  private static final long SYNC_TIMEOUT_MS = 10_000;
 
   private final RetryPolicy retryPolicy = new ExponentialBackoffRetry(100, 5);
 
@@ -279,6 +283,42 @@ abstract class ZKMap<K, V> {
     return future.future();
   }
 
+  /**
+   * Block according to the retry policy before retrying an operation that lost against a concurrent update, or fail
+   * when no more retries are remaining. This method blocks.
+   */
+  void awaitRetry(int retries, long startTime) {
+    if (!retryPolicy.allowRetry(retries, Instant.now().toEpochMilli() - startTime, RetryLoop.getDefaultRetrySleeper())) {
+      throw new VertxException("failed to acquire optimistic lock");
+    }
+  }
+
+  /**
+   * Make the next reads of this client reflect the writes made before by other clients. This method blocks.
+   */
+  void sync(String path) throws Exception {
+    CompletableFuture<Void> fut = new CompletableFuture<>();
+    curator.sync().inBackground((client, event) -> fut.complete(null)).forPath(path);
+    fut.get(SYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+  }
+
+  ACLBackgroundPathAndBytesable<String> creator(Optional<Long> timeToLive) {
+    return timeToLive.isPresent()
+      ? curator.create().withTtl(timeToLive.get()).creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT_WITH_TTL)
+      : curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT);
+  }
+
+  /**
+   * Delete the map node when it has no entries, ZooKeeper refuses to delete it otherwise. This method blocks.
+   */
+  void deleteMapIfEmpty() throws Exception {
+    try {
+      curator.delete().forPath(mapPath);
+    } catch (KeeperException.NotEmptyException | KeeperException.NoNodeException ignore) {
+      // In use or already deleted
+    }
+  }
+
   Future<Stat> create(K k, V v, Optional<Long> timeToLive) {
     return create(keyPath(k), v, timeToLive);
   }
@@ -286,10 +326,7 @@ abstract class ZKMap<K, V> {
   Future<Stat> create(String path, V v, Optional<Long> timeToLive) {
     Promise<Stat> future = Promise.promise();
     try {
-      ACLBackgroundPathAndBytesable<String> creator = timeToLive.isPresent()
-        ? curator.create().withTtl(timeToLive.get()).creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT_WITH_TTL)
-        : curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT);
-      creator.inBackground((cl, el) -> {
+      creator(timeToLive).inBackground((cl, el) -> {
         if (el.getType() == CuratorEventType.CREATE) {
           vertx.runOnContext(aVoid -> future.complete(el.getStat()));
         }
@@ -316,10 +353,6 @@ abstract class ZKMap<K, V> {
       vertx.runOnContext(event -> future.fail(ex));
     }
     return future.future();
-  }
-
-  Future<V> delete(K k, V v) {
-    return delete(keyPath(k), v);
   }
 
   Future<V> delete(String path, V v) {
