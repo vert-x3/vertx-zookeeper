@@ -276,10 +276,23 @@ public class ZookeeperClusterManager implements ClusterManager, PathChildrenCach
       clusterNodes.start(PathChildrenCache.StartMode.NORMAL);
       //Join to the cluster
       createThisNode();
+      awaitThisNodeInCache();
       joined = true;
       subsMapHelper = new SubsMapHelper(curator, vertx, registrationListener, nodeId);
     } catch (Exception e) {
       throw new VertxException(e);
+    }
+  }
+
+  // The cache is populated asynchronously, the nodes of the cluster must include this node once joined
+  private void awaitThisNodeInCache() throws InterruptedException {
+    String path = ZK_PATH_CLUSTER_NODE + nodeId;
+    long deadline = System.currentTimeMillis() + SYNC_TIMEOUT_MS;
+    while (clusterNodes.getCurrentData(path) == null) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new VertxException("Timed out waiting for node " + nodeId + " to be in the cluster nodes", true);
+      }
+      Thread.sleep(10);
     }
   }
 
